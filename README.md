@@ -30,7 +30,7 @@ Open browser console (`F12`) and look for:
 → Use HTTP server, not `file://`
 
 **"Module compilation failed"**
-→ Run `npm run asbuild` again
+→ Run `npm run asbuild` again 
 
 **"Results look wrong"**
 → Check `MEMORY_PROTOCOL.md` alignment
