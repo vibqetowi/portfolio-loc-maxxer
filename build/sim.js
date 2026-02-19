@@ -1,0 +1,61 @@
+async function instantiate(module, imports = {}) {
+  const adaptedImports = {
+    env: Object.assign(Object.create(globalThis), imports.env || {}, {
+      abort(message, fileName, lineNumber, columnNumber) {
+        // ~lib/builtins/abort(~lib/string/String | null?, ~lib/string/String | null?, u32?, u32?) => void
+        message = __liftString(message >>> 0);
+        fileName = __liftString(fileName >>> 0);
+        lineNumber = lineNumber >>> 0;
+        columnNumber = columnNumber >>> 0;
+        (() => {
+          // @external.js
+          throw Error(`${message} in ${fileName}:${lineNumber}:${columnNumber}`);
+        })();
+      },
+      seed() {
+        // ~lib/builtins/seed() => f64
+        return (() => {
+          // @external.js
+          return Date.now() * Math.random();
+        })();
+      },
+    }),
+  };
+  const { exports } = await WebAssembly.instantiate(module, adaptedImports);
+  const memory = exports.memory || imports.env.memory;
+  const adaptedExports = Object.setPrototypeOf({
+    getInputPtr() {
+      // assembly/index/getInputPtr() => usize
+      return exports.getInputPtr() >>> 0;
+    },
+    getOutputPtr() {
+      // assembly/index/getOutputPtr() => usize
+      return exports.getOutputPtr() >>> 0;
+    },
+  }, exports);
+  function __liftString(pointer) {
+    if (!pointer) return null;
+    const
+      end = pointer + new Uint32Array(memory.buffer)[pointer - 4 >>> 2] >>> 1,
+      memoryU16 = new Uint16Array(memory.buffer);
+    let
+      start = pointer >>> 1,
+      string = "";
+    while (end - start > 1024) string += String.fromCharCode(...memoryU16.subarray(start, start += 1024));
+    return string + String.fromCharCode(...memoryU16.subarray(start, end));
+  }
+  return adaptedExports;
+}
+export const {
+  memory,
+  getInputPtr,
+  getOutputPtr,
+  runSimulation,
+} = await (async url => instantiate(
+  await (async () => {
+    const isNodeOrBun = typeof process != "undefined" && process.versions != null && (process.versions.node != null || process.versions.bun != null);
+    if (isNodeOrBun) { return globalThis.WebAssembly.compile(await (await import("node:fs/promises")).readFile(url)); }
+    else { return await globalThis.WebAssembly.compileStreaming(globalThis.fetch(url)); }
+  })(), {
+  }
+))(new URL("sim.wasm", import.meta.url));

@@ -1,0 +1,30 @@
+# Jekyll configuration for GitHub Pages deployment
+
+# Exclude source files and development directories from the built site
+exclude:
+  - node_modules/
+  - package.json
+  - package-lock.json
+  - assembly/
+  - asconfig.json
+  - documentation/
+  - LICENCE
+  - README.md
+  - .gitignore
+  - .github/
+
+# Include the compiled WebAssembly and scripts
+include:
+  - build/
+  - scripts/
+
+# Disable Jekyll processing for certain file types
+defaults:
+  - scope:
+      path: "build"
+    values:
+      layout: none
+  - scope:
+      path: "scripts"
+    values:
+      layout: none

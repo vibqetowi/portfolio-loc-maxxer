@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio LOC Survival Simulator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
+    <script src="scripts/copywriting-helpers.js"></script>
+    <script defer src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>/* Placeholder for any page-specific overrides */</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="intro">
+        <h1>Portfolio Line of Credit Strategy Analyzer</h1>
+
+        <p style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800; margin: 20px 0; font-size: 0.95rem;">
+            <strong>Not Financial Advice:</strong> Educational simulation only.
+        </p>
+        
+        <h3 style="text-align: center; margin-top: 20px; border: none; padding: 0;">What Is a Portfolio Line of Credit?</h3>
+        <p>
+            When you own stocks or ETFs, some lenders will give you a loan secured by your portfolio. This is called a <strong>Portfolio Line of Credit</strong>.
+        </p>
+        <p id="intro-paragraph">
+            Investors use Portfolio LOCs because in the long term the stock market returns approximately <strong><span id="growth-rate-intro"></span> per year</strong>, while borrowing costs approximately <strong><span id="interest-rate-intro"></span> (Prime + 1%)</strong> on average. Over <span id="loan-period-intro"></span> years, that <span id="spread-intro-2"></span> spread compounds into substantial portfolio growth if markets rise.
+        </p>
+        <p id="catch-paragraph">
+            The spread accrues only when markets rise. When markets crash, debt obligations remain fixed at <span id="interest-rate-catch"></span> interest while portfolio value shrinks. This <strong>leveraged</strong> strategy amplifies both gains and losses.
+        </p>
+
+            <div style="background: #E8EAF6; padding: 20px; border-radius: 4px; border-left: 4px solid #6200EE; margin: 40px 0;">
+                  <h3 style="text-align: center; margin-top: 20px; border: none; padding: 0;">Monthly Payment Allocation Strategy</h3>
+        <p>
+            This calculator assumes you <strong>budget the full amortized payment amount monthly</strong>. You decide how to allocate this amount: toward debt repayment or toward additional investments.
+        </p>
+        <p>
+            <strong>The 50/30/20 Rule:</strong> A common personal finance guideline allocates 50% of income to needs (essentials), 30% to wants (discretionary), and 20% to financial goals (savings, debt repayment, investing). It is generally good practice to allocate more than 20% towards financial goals for younger investors or investors pursuing aggressive strategies like leverage.
+        </p> 
+        <p>
+            The theoretical maximum gain occurs when the full principal and interest are repaid in one payment at the end of the borrowing period. This scenario also presents the highest risk of losing everything in a margin call. 
+        </p>
+       
+       
+    </div>
+        
+       <h3 style="text-align: center; margin-top: 20px; border: none; padding: 0;">How the Comparison Works: Leverage vs. Baseline</h3>
+        <p style="margin: 12px 0; line-height: 1.6;">
+            Comparing leverage to a baseline determines whether it generates sufficient returns per unit of risk. This calculator tests both paths side-by-side:
+        </p>
+        <ul style="margin: 12px 0; line-height: 1.8; padding-left: 20px;">
+            <li><strong>Leveraged Path (Your Strategy):</strong> You take a loan and invest it. These simulations test whether leverage amplifies gains when debt is serviced at various monthly payment levels.</li>
+            <li><strong>Baseline (No Debt):</strong> The baseline excludes borrowing and assumes you invest the full budgeted amount into the market each month. </li>
+        </ul>
+
+         <p id="simulation-description">
+            This calculator tests <strong><span id="num-strategies"></span> different payment strategies</strong> across <strong><span id="base-simulations"></span> different market scenarios</strong>. From these simulations, it builds a probability distribution: what percentage of outcomes result in ruin, what percentage result in underperformance, and what percentage result in profit. </p>
+
+            <p>
+            
+            This distribution helps answer questios such as: <strong>Should leverage be deployed? At what loan-to-value ratio? With what monthly payment amount?</strong>
+        </p>
+
+
+
+
+    </div>
+
+
+    <div class="mode-toggle">
+        <button id="standardMode" class="btn-active" onclick="setMode('standard')">Standard Mode</button>
+        <button id="customMode" class="btn-inactive" onclick="setMode('custom')">Custom Mode</button>
+    </div>
+        <div id="modeDescription"></div>
+    <div style="display: flex; justify-content: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-weight: 500; color: #757575;">Risk Profile:</label>
+            <button id="riskAggressive" class="risk-btn" onclick="setRiskProfile('aggressive')">Aggressive</button>
+            <button id="riskMedian" class="risk-btn risk-btn-active" onclick="setRiskProfile('median')">Median</button>
+            <button id="riskConservative" class="risk-btn" onclick="setRiskProfile('conservative')">Conservative</button>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Simulation Period (Years)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Planned holding period for debt repayment. Longer periods increase recovery probability from downturns and extend exposure to adverse events. Outcome distribution changes with this parameter.</div>
+            </div>
+            <input type="number" id="loanPeriod" value="40" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
+        </div>
+        <div class="input-group" id="monthlyBudgetGroup">
+            <div class="label-wrapper">
+                <label>Monthly Budget for Investing ($)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Your total monthly budget available for debt payments and investments. This becomes your theoretical maximum monthly payment. Any amount not used for debt service will be invested monthly.</div>
+            </div>
+            <input type="number" id="monthlyBudget" value="500" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label id="assetLabel">Book Value of Collateral Account ($)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup" id="assetTooltip">The total value of your investment account that's backing the loan. If you have $100K in stocks, that's your collateral. The calculator uses this to determine Loan-to-Value—if you borrow $60K against $100K, that's 60% LTV.</div>
+            </div>
+            <input type="number" id="assetValue" value="28571" step="1" onchange="updateLoanFromCollateral()" oninput="updateLoanFromCollateral()">
+        </div>
+        <div class="input-group" id="ltvSliderGroup">
+            <div class="label-wrapper">
+                <label>Loan-to-Value Ratio (%)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Loan-to-Value ratio as a percentage of collateral. At 0%, no borrowing occurs. <span id="max-ltv-tooltip"></span> is the maximum LTV threshold in Standard Mode.</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="ltvSlider" min="0" max="35" step="1" value="35" oninput="updateLoanFromSlider()" style="flex: 1;">
+                <div style="min-width: 50px; font-weight: 600; color: #2196F3; text-align: right;"><span id="ltvDisplay">35</span>%</div>
+            </div>
+        </div>
+        <div class="input-group" id="loanAmountDisplay">
+            <div class="label-wrapper">
+                <label>Loan Amount ($)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Calculated from your collateral and LTV ratio. This is the amount borrowed from the lender to invest.</div>
+            </div>
+            <input type="number" id="loanAmount" value="10000" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+        </div>
+        <!-- Budget Warning Display -->
+        <div id="budgetWarning" style="display: none; grid-column: 1 / -1; background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800; margin: 10px 0;">
+            <strong>⚠️ Budget Warning:</strong> <span id="budgetWarningText"></span>
+        </div>
+        <div class="input-group" id="assetInputTypeGroup">
+            <div class="label-wrapper">
+                <label>Collateral Input Type</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Choose how the starting position is defined: as a Loan-to-Value ratio (what % of the portfolio is borrowed) or as total cash value.</div>
+            </div>
+            <select id="assetInputType" onchange="toggleAssetInput()">
+                <option value="collateral">Book Value of Collateral Account ($)</option>
+                <option value="ltv">Starting LTV (%)</option>
+            </select>
+        </div>
+        <div class="input-group" id="loanAmountInput" style="display: none;">
+            <div class="label-wrapper">
+                <label>Loan Amount ($)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Amount borrowed from the lender to invest. This is secured by an existing portfolio.</div>
+            </div>
+            <input type="number" id="loanAmountCustom" value="10000" onchange="syncLoanAmount()" oninput="syncLoanAmount()">
+        </div>
+        <div class="input-group" id="interestRateGroup">
+            <div class="label-wrapper">
+                <label>Long-Term Interest Rate (%)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Annual interest paid on borrowed money over the long term. A common assumption is ~<span id="interest-rate-tooltip"></span> based on historical prime rates plus lender spread. Higher rates require higher market returns to profit.</div>
+            </div>
+            <input type="number" id="interestRate" value="7.0" step="0.1" onchange="handleInterestRateChange()" oninput="handleInterestRateChange()">
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Min. Monthly Payment ($)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">The minimum monthly payment toward debt. Set by Payment Type: Custom (user-defined), Interest Only (covers interest accrual only), or Standard Mode (<span id="payment-pct-tooltip"></span> of amortized payment). Budget amounts exceeding the minimum allocate to investments.</div>
+            </div>
+            <input type="number" id="minPayment" value="0" onchange="syncMinPayment()">
+        </div>
+        <div class="input-group" id="paymentTypeGroup">
+            <div class="label-wrapper">
+                <label>Payment Type</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Custom Amount: Set a specific monthly payment (default $0). Interest Only: Pay only monthly interest. Standard Mode: Pay <span id="payment-pct-tooltip-2"></span> of the amortized payment amount.</div>
+            </div>
+            <select id="paymentType" onchange="updatePaymentType()">
+                <option value="custom">Custom Amount</option>
+                <option value="interest">Interest Only</option>
+                <option value="standard" id="payment-standard-option">Standard Mode (50% Amortization)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Stock Market Growth (%)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Expected annual return. The S&P 500 has averaged ~<span id="growth-tooltip"></span> historically. This is the expected return—actual results vary year to year.</div>
+            </div>
+            <input type="number" id="growth" value="8" step="0.1">
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Market Volatility (Annual %)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">How wild the swings get. <span id="volatility-tooltip"></span> is standard stock market volatility (S&P 500). This simulator uses this to generate realistic scenarios where some years are +30% and others are -20%.</div>
+            </div>
+            <input type="number" id="vol" value="15" step="0.1">
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Margin Call Threshold (%)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">The maximum Loan-to-Value before forced liquidation. <span id="margin-call-tooltip"></span> is conservative. More aggressive lenders allow up to 75-80%; more conservative lenders enforce 40-50%.</div>
+            </div>
+            <input type="number" id="marginCall" value="75" step="0.1">
+        </div>
+        <div class="input-group">
+            <div class="label-wrapper">
+                <label>Inflation Rate (%)</label>
+                <div class="tooltip-icon">?</div>
+                <div class="tooltip-popup">Annual inflation rate used to convert nominal wealth to real dollars (today's purchasing power). Locked to <span id="inflation-tooltip"></span> in Standard Mode based on long-term expectations.</div>
+            </div>
+            <input type="number" id="inflationRate" value="3.5" step="0.1">
+        </div>
+    </div>
+
+    <button class="calc-btn" id="calculateBtn" onclick="handleCalculate()">Calculate</button>
+
+    <div id="results">
+        <div id="summary" class="summary-box"></div>
+        
+        <!-- Interactive Slider for Strategy Exploration -->
+        <div class="slider-container">
+            <h3 style="margin-top: 0; border: none;">Explore Payment Strategies</h3>
+            <p style="margin-bottom: 16px; font-size: 0.9rem;">
+                Adjust the slider to test different monthly payment strategies. Each position represents a percentage of the full amortization payment. Percentages above 100% exceed budget allocation.
+            </p>
+            <div class="slider-labels">
+                <span>Min Payment (Aggressive)</span>
+                <span>Monthly Budget (Conservative)</span>
+            </div>
+            <input type="range" id="strategySlider" class="strategy-slider" min="0" max="19" step="1" value="0">
+
+            <div style="margin-top: 16px; padding: 12px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #2196F3; font-size: 0.85rem; color: #555;">
+                <p style="margin: 0 0 8px 0;">
+                    <strong>💡 How to Use the Slider:</strong> Adjust the monthly payment to see how paying down debt faster shifts the probabilities of profiting. Compare the three-zone grid below to find your optimal strategy.
+                </p>
+                <p style="margin: 0;">
+                    <strong>Payment Reference:</strong> You are paying <strong><span id="selectedPaymentAmount">$0</span>/month</strong>, which is <strong><span id="paymentPercentAmortization">0</span>%</strong> of amortization and <strong><span id="paymentPercentBudget">0</span>%</strong> of your monthly budget.
+                </p>
+            </div>
+        </div>
+
+                <!-- Histogram Chart -->
+        <div id="histogramChart"></div>
+        
+        <!-- Dynamic Strategy Summary -->
+        <div id="dynamicSummary" class="strategy-summary"></div>
+        
+
+        
+        <div id="chart"></div>
+       
+    </div>
+
+    <div class="social-section">
+        <h3>Connect with me</h3>
+        <div class="social-buttons">
+            <a href="https://linkedin.com/in/hm-eng" target="_blank" class="social-btn btn-linkedin">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+            <a href="https://wealthsimple.com/invite/9HKHRH" target="_blank" class="social-btn btn-wealthsimple">
+                <i class="fas fa-leaf"></i> My Wealthsimple Referral Code
+            </a>
+            <a href="https://github.com/vibqetowi/portfolio-loc-maxxer" target="_blank" class="social-btn btn-github">
+                <i class="fab fa-github"></i> View Code
+            </a>
+        </div>
+    </div>
+
+    <div class="methodology">
+        <h3>How This Calculator Works</h3>
+        
+        <p id="monte-carlo-intro">
+            This tool uses <strong>Monte Carlo simulation</strong> combined with <strong>Present Value of Annuity</strong> principles to stress-test a Portfolio LOC strategy across <span id="sim-count-method"></span> different market scenarios.
+        </p>
+
+        <h4 style="margin: 20px 0 10px 0;">Step 1: Calculate the Amortized Payment</h4>
+        <p>
+            First, the "correct" monthly payment is determined to reduce the loan to exactly $0 at the end of the holding period:
+        </p>
+        <div class="formula">
+            P = L × [r(1+r)^n] / [(1+r)^n - 1]<br><br>
+            Where:<br>
+            P = Monthly payment<br>
+            L = Loan amount<br>
+            r = Monthly interest rate (annual rate ÷ 12)<br>
+            n = Total number of months
+        </div>
+        <p style="font-size: 0.9rem; color: #666;">
+            This is the standard amortization formula. Paying this amount every month amortizes the loan to $0.
+        </p>
+
+        <h4 style="margin: 20px 0 10px 0;">Step 2: Test <span id="num-strategies-step2"></span> Payment Strategies</h4>
+        <p id="methodology-step2-text">
+            Testing replaces arbitrary selection. We evaluate <span id="num-strategies-step2-2"></span> different payment strategies, ranging from minimum payment to the monthly budget. Each strategy occupies a discrete position on the risk-reward spectrum. Low-payment strategies employ high leverage; high-payment strategies accelerate debt reduction.
+        </p>
+
+        <h4 style="margin: 20px 0 10px 0;">Step 3: Run <span id="sim-count-step3"></span> Market Scenarios (Plus <span id="baseline-sims-step3"></span> for Benchmark)</h4>
+        <p id="methodology-step3-text">
+            For each payment strategy, we simulate <span id="sim-count-step3-2"></span> different market paths. For the benchmark (no-debt baseline), I run <span id="baseline-sims-step3-2"></span> simulations for better statistical accuracy. 
+        </p>
+        <p>
+            Each simulation uses <strong>geometric Brownian motion</strong>—the mathematical model describing how stock prices move in continuous time. In practical terms: each month, the program generates a market return stochastically, updates portfolio value, applies your payment, and compounds interest on remaining debt.
+        </p>
+        <div class="formula">
+            Monthly Return = exp[(μ - 0.5σ²) × (1/12) + σ√(1/12) × Z]<br><br>
+            Where:<br>
+            <span id="formula-params">μ = Expected annual growth rate (<span id="growth-formula"></span> in Standard Mode)<br>
+            σ = Volatility / standard deviation (<span id="volatility-formula"></span> in Standard Mode)<br>
+            Z = Random normal variable (simulates market surprises)</span>
+        </div>
+        <p style="font-size: 0.9rem; color: #666;">
+            This is the same model used by Wall Street quants. It captures the reality that annual market returns include years with +30% returns and years with -20% returns, distributed around an average of +<span id="growth-avg"></span>.
+        </p>
+
+        <h4 style="margin: 20px 0 10px 0;">Step 4: Check for Margin Call</h4>
+        <p id="margin-call-step4">
+            Lenders enforce maximum Loan-to-Value ratios. When debt exceeds this threshold relative to portfolio value, the lender executes forced liquidation to reduce risk. In Standard Mode, this threshold is <span id="margin-call-step4-val"></span> LTV. 
+        </p>
+        <p id="margin-call-followup">
+            If your debt ratio exceeds <span id="margin-call-followup-val"></span> of portfolio value at any point, the lender executes forced liquidation: your positions are sold, the lender recovers the debt, and your account balance becomes $0. The calculator tracks survival rate—the percentage of <span id="sim-count-margin"></span> simulations where liquidation does not occur.
+        </p>
+        <p style="font-size: 0.9rem; color: #666;" id="margin-call-note">
+            <span id="margin-call-note-val"></span> LTV is conservative relative to market-based lender thresholds. Lender thresholds range from 40-50% (conservative) to 75-80% (aggressive). Custom Mode permits threshold modification.
+        </p>
+
+        <h4 style="margin: 20px 0 10px 0;">Step 5: Calculate Real Wealth (Adjusted for Inflation)</h4>
+        <p>
+            For scenarios in which liquidation does not occur, the final portfolio value converts to inflation-adjusted dollars. All wealth results display in present-day purchasing power. 
+        </p>
+        <p id="inflation-example">
+            For example, if your portfolio grows to $1M in <span id="loan-period-inflation"></span> years but inflation is <span id="inflation-rate-example"></span> per year, that $1M in the future equals less purchasing power in today's dollars. This calculator converts all final wealth to current purchasing power.
+        </p>
+        <div class="formula">
+            Real Wealth = Nominal Wealth / (1 + Inflation Rate)^Years
+        </div>
+        <p style="font-size: 0.9rem; color: #666;">
+            This conversion is essential for valid comparison. If both strategies generate similar nominal returns but one carries leverage risk, the real return per unit of risk differs significantly.
+        </p>
+
+        <h3 style="margin-top: 30px;">Standard Mode Assumptions: Conservative Baseline Parameters</h3>
+        <p>
+            Standard Mode uses research-backed defaults. These parameters bias toward risk reduction rather than return maximization:
+        </p>
+        <ul style="margin: 12px 0; line-height: 1.8; padding-left: 20px;" id="standard-assumptions-list">
+            <li><strong>Interest Rate: <span id="interest-assumptions"></span></strong> — This assumes Canadian Prime Rate stays around 6% plus a 1% lender spread. It's higher than current rates (early 2026), so it accounts for rate increases over your <span id="loan-period-assumptions"></span>-year period.</li>
+            <strong>Market Growth: <span id="growth-assumptions"></span> per year</strong> — Historical average for the S&P 500 from 1950-2024. This is the long-term mean, not the best-case scenario. Annual returns cluster around this mean with typical annual variation of approximately ±15%.
+            <li><strong>Volatility: <span id="volatility-assumptions"></span> per year</strong> — Standard deviation of annual S&P 500 returns. Annual returns distribute around zero mean with ±15% typical range. This captures realized portfolio swings from market cycle behavior.</li>
+            <li><strong>Margin Call Threshold: <span id="margin-assumptions"></span> LTV</strong> — Conservative. Different lenders enforce 40-80% LTV depending on their risk appetite. At <span id="margin-assumptions-2"></span>, the lender protects themselves earlier, which means higher probability of liquidation if markets decline.</li>
+            <li><strong>Inflation: <span id="inflation-assumptions"></span> per year</strong> — Long-term average U.S. inflation. All final wealth figures convert to "today's dollars" using this rate.</li>
+            <li><strong>Monthly Payment: <span id="payment-assumptions"></span> of Amortized</strong> (auto-calculated) — Default starting point. At <span id="payment-assumptions-2"></span> amortization, principal decreases slowly; this strategy prioritizes leverage over debt reduction. This starting point allows exploration of the debt-reduction tradeoff.</li>
+        </ul>
+        <p style="font-size: 0.9rem; color: #666;">
+            These assumptions derive from conservative long-term historical averages. Custom Mode permits adjustment of parameters when prior analysis indicates different inputs.
+        </p>
+
+        <h3 style="margin-top: 30px;">The Three Outcomes: Ruin, Sucker, Profit</h3>
+        <p>
+            Every simulation outcome falls into one of three mutually exclusive categories. The distribution across these categories determines whether leverage generates sufficient returns per unit of risk:
+        </p>
+        <ul style="margin: 12px 0; line-height: 1.8; padding-left: 20px;">
+            <li id="ruin-outcome"><strong>Ruin (Red):</strong> Your account hit the <span id="margin-ruin"></span> margin call threshold and was liquidated. You lost everything (0 wealth remaining). This happens when debt grew faster than your portfolio value during a downturn. The "ruin probability" is the percentage of <span id="sim-count-ruin"></span> scenarios where this occurs.</li>
+            <li><strong>Sucker (Orange):</strong> Liquidation did not occur, but final wealth falls below the no-debt baseline. Interest payments to the lender and capital allocation to debt service, combined with outcome variance, produced underperformance relative to the risk-free leveraged strategy.</li>
+            <li id="profit-outcome"><strong>Profit (Green):</strong> You survived without liquidation, <em>and</em> your final wealth exceeds the no-debt baseline. The <span id="spread-profit"></span> spread between borrowing costs and market returns compounded in your favor. You earned more than you would have without leverage.</li>
+        </ul>
+        <p style="font-size: 0.9rem; color: #666;">
+            Distribution across these three categories is non-uniform and depends entirely on payment strategy. Lower monthly payments increase ruin probability but also increase profit probability if liquidation is avoided. Higher monthly payments reduce ruin probability at the cost of reduced profit probability. The optimal payment strategy balances ruin risk reduction against profit probability maximization. When ruin risk exceeds defined thresholds, the analysis indicates borrowing reduction.
+        </p>
+
+        <h3 style="margin-top: 30px;">Model Limitations</h3>
+        <p>
+            This calculator is a simplified simulation. It does <strong>not</strong> account for several real-world factors:
+        </p>
+        <ul style="margin: 12px 0; line-height: 1.8; padding-left: 20px;">
+            <li><strong>Taxes:</strong> Capital gains taxes, dividend taxes, and interest deductibility are not modeled. Tax treatment varies by jurisdiction and can significantly reduce actual returns.</li>
+            <li><strong>Inflation:</strong> Outputs convert to real dollars using a constant inflation rate assumption. Actual inflation rates are volatile; this model treats inflation as constant, which understates purchasing power variance.</li>
+            <li><strong>Variable Interest Rates:</strong> We assume a fixed borrowing rate throughout the simulation. In reality, rates fluctuate with central bank policy and economic conditions.</li>
+            <li><strong>Fees & Transaction Costs:</strong> Management fees, trading commissions, bid-ask spreads, and other transaction costs are not included.</li>
+            <li><strong>Market Regime Changes:</strong> The model assumes returns follow a consistent distribution. Real markets experience structural shifts, prolonged bear markets, and black swan events.</li>
+            <li><strong>Behavioral Factors:</strong> Panic-selling during downturns, inability to maintain payments during job loss, or psychological stress from leverage are not modeled.</li>
+            <li><strong>Sequence of Returns Risk:</strong> The order in which returns occur matters significantly. A large loss early on is much more damaging than the same loss later, even with identical average returns.</li>
+        </ul>
+        <p style="font-size: 0.9rem; color: #666;">
+            <strong>Bottom line:</strong> This tool shows mathematical probabilities under idealized conditions, not guarantees. Real-world investing involves significantly more complexity and uncertainty.
+        </p>
+
+        <h3 style="margin-top: 30px;">Understanding the Economic Theory (Plain English)</h3>
+        
+        <div class="reference" id="reference-leverage">
+            <strong>Leverage & The Spread:</strong> The fundamental idea behind Portfolio LOCs is <strong>positive carry</strong>. If you borrow at <span id="interest-reference-1"></span> and invest at <span id="growth-reference-1"></span>, you keep <span id="spread-reference-1"></span> on borrowed capital. Read more: <a href="https://www.investopedia.com/terms/c/carry.asp" target="_blank">Investopedia's carry trade explanation</a>. The catch: this only works if markets go up. In down markets, you're paying <span id="interest-reference-1b"></span> on a shrinking asset base—the exact opposite dynamic.
+        </div>
+        
+        <div class="reference" id="reference-time-value">
+            <strong>Time Value of Money & Loan Amortization:</strong> When you borrow $100,000 over <span id="loan-period-reference-2"></span> years at <span id="interest-reference-2"></span>, there's a specific monthly payment that makes sense: <a href="https://www.investopedia.com/terms/a/amortization.asp" target="_blank">Investopedia's amortization guide</a> explains the math. The formula we use calculates that "fair" payment. Paying less means you're extending the debt; paying more means you're paying it off faster.
+        </div>
+        
+        <div class="reference">
+            <strong>How Modern Finance Models Markets: Geometric Brownian Motion:</strong> Stock prices exhibit non-linear behavior in continuous time. The standard mathematical model is <a href="https://www.investopedia.com/terms/g/geometric-brownian-motion.asp" target="_blank">geometric Brownian motion</a>, formally defined as a random walk with drift parameter. The Black-Scholes option-pricing model uses this framework. The GBM formula maintains boundary conditions: losses are capped at -100%, upside is theoretically unlimited, and volatility compounds naturally.
+        </div>
+        
+        <div class="reference">
+            <strong>Monte Carlo Simulation: Outcome Distribution Through Randomized Scenario Testing:</strong> This calculator generates distributions of possible outcomes by running the scenario thousands of times with randomized market variations. <a href="https://www.britannica.com/technology/Monte-Carlo-method" target="_blank">Britannica</a> and <a href="https://www.khanacademy.org/economics-finance-domain/core-finance/interest-debt/pq-mnt-wealth/a/monte-carlo-simulation" target="_blank">Khan Academy</a> explain the concept: the method reveals what distribution of outcomes emerges under varied conditions. NASA, insurance companies, and hedge funds use this approach for stress-testing models and understanding ranges of probabilities rather than attempting point prediction.
+        </div>
+        
+        <div class="reference" id="reference-margin-call">
+            <strong>Margin Calls & Forced Liquidation:</strong> When borrowing against a portfolio, the lender enforces a maximum Loan-to-Value ratio. Read <a href="https://www.investopedia.com/terms/m/margincall.asp" target="_blank">Investopedia's margin call explanation</a>. When the ratio is breached, the lender executes forced liquidation: your positions are sold, the debt is repaid from proceeds, and remaining assets transfer to your account. This mechanism occurred during 2008 and 2020 market downturns. Standard Mode uses <span id="margin-reference-4"></span> LTV as a conservative threshold; mortgage lenders range from 40-50% (conservative) to 75-80% (aggressive).
+        </div>
+        
+        <div class="reference" id="reference-inflation">
+            <strong>Real vs. Nominal Returns—Inflation Adjustment:</strong> A $1M portfolio in the future has different purchasing power than $1M in current dollars. If inflation is <span id="inflation-rate-example"></span> per year for <span id="loan-period-reference-5"></span> years, future $1M equals current $<span id="pv-calc-result">750</span>K in purchasing power. This calculator converts all results to current purchasing power using the specified inflation rate. <a href="https://www.investopedia.com/terms/r/realinterestrate.asp" target="_blank">Investopedia on real interest rates</a> explains the concept applied to debt. For wealth: <a href="https://www.khanacademy.org/economics-finance-domain/macroeconomics/aggregate-demand-supply/inflation-tutorial/v/inflation-and-real-return" target="_blank">Khan Academy's inflation and real return video</a> walks through it step-by-step.
+        </div>
+    </div>
+
+    <div class="methodology">
+        <h3>Legal Disclaimer</h3>
+        <p>
+            This tool is provided for educational and informational purposes only and does not constitute financial, investment, legal, or tax advice. Use of this tool does not create any fiduciary relationship. Users are solely responsible for financial decisions and for verifying any information before acting on it.
+        </p>
+        <p>
+            Results are based on Monte Carlo simulations and simplified assumptions. Simulated outcomes do not predict actual performance. Leverage can magnify both gains and losses, and losses may exceed invested capital. Past performance is not indicative of future results.
+        </p>
+    </div>
+
+</div>
+
+<script>
+// Initialize all dynamic copywriting on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Helper to set text content safely
+    function setText(id, text) {
+        const elem = document.getElementById(id);
+        if (elem) elem.textContent = text;
+    }
+    
+    // Intro section
+    setText('growth-rate-intro', CopywritingHelpers.getGrowthRateText());
+    setText('growth-rate-intro-2', CopywritingHelpers.getGrowthRateText());
+    setText('interest-rate-intro', CopywritingHelpers.getInterestRateText());
+    setText('interest-rate-intro-2', CopywritingHelpers.getInterestRateText());
+    setText('spread-intro', CopywritingHelpers.getSpreadText());
+    setText('spread-intro-2', CopywritingHelpers.getSpreadText());
+    setText('loan-period-intro', DEFAULT_INPUTS.LOAN_PERIOD);
+    setText('spread-catch', CopywritingHelpers.getSpreadText());
+    setText('interest-rate-catch', CopywritingHelpers.getInterestRateText());
+    
+    // Simulation description
+    setText('num-strategies', UI_CONSTANTS.NUM_STRATEGIES - 1);
+    setText('base-simulations', CopywritingHelpers.getBaseCaseSimulationsText());
+    setText('loan-period-baseline', DEFAULT_INPUTS.LOAN_PERIOD);
+    
+    // Tooltips
+    setText('max-ltv-tooltip', CopywritingHelpers.getMaxLTVText());
+    setText('interest-rate-tooltip', CopywritingHelpers.getInterestRateText());
+    setText('payment-pct-tooltip', CopywritingHelpers.getPaymentPercentageText());
+    setText('payment-pct-tooltip-2', CopywritingHelpers.getPaymentPercentageText());
+    setText('growth-tooltip', CopywritingHelpers.getGrowthRateText());
+    setText('volatility-tooltip', CopywritingHelpers.getVolatilityText());
+    setText('margin-call-tooltip', CopywritingHelpers.getMarginCallText());
+    setText('inflation-tooltip', CopywritingHelpers.getInflationText());
+    
+    // Payment type select option
+    const paymentStandardOption = document.getElementById('payment-standard-option');
+    if (paymentStandardOption) {
+        paymentStandardOption.textContent = `Standard Mode (${CopywritingHelpers.getPaymentPercentageText()} Amortization)`;
+    }
+    
+    // Methodology section
+    setText('sim-count-method', CopywritingHelpers.getSimulationCountText());
+    setText('num-strategies-step2', UI_CONSTANTS.NUM_STRATEGIES - 1);
+    setText('num-strategies-step2-2', UI_CONSTANTS.NUM_STRATEGIES - 1);
+    setText('sim-count-step3', CopywritingHelpers.getSimulationCountText());
+    setText('sim-count-step3-2', CopywritingHelpers.getSimulationCountText());
+    setText('baseline-sims-step3', CopywritingHelpers.getBaseCaseSimulationsText());
+    setText('baseline-sims-step3-2', CopywritingHelpers.getBaseCaseSimulationsText());
+    setText('growth-formula', CopywritingHelpers.getGrowthRateText());
+    setText('volatility-formula', CopywritingHelpers.getVolatilityText());
+    setText('growth-avg', STANDARD_MODE_DEFAULTS.GROWTH_RATE);
+    setText('margin-call-step4-val', CopywritingHelpers.getMarginCallText());
+    setText('margin-call-followup-val', CopywritingHelpers.getMarginCallText());
+    setText('sim-count-margin', CopywritingHelpers.getSimulationCountText());
+    setText('margin-call-note-val', CopywritingHelpers.getMarginCallText());
+    setText('loan-period-inflation', DEFAULT_INPUTS.LOAN_PERIOD);
+    setText('inflation-rate-example', CopywritingHelpers.getInflationText());
+    setText('interest-rate-economics', CopywritingHelpers.getInterestRateText());
+    setText('growth-rate-economics', CopywritingHelpers.getGrowthRateText());
+    setText('spread-economics', CopywritingHelpers.getSpreadText());
+    setText('loan-period-economics', DEFAULT_INPUTS.LOAN_PERIOD);
+    
+    // Standard assumptions
+    setText('interest-assumptions', CopywritingHelpers.getInterestRateText());
+    setText('loan-period-assumptions', DEFAULT_INPUTS.LOAN_PERIOD);
+    setText('growth-assumptions', CopywritingHelpers.getGrowthRateText());
+    setText('growth-assumptions-2', CopywritingHelpers.getGrowthRateText());
+    setText('volatility-assumptions', CopywritingHelpers.getVolatilityText());
+    setText('margin-assumptions', CopywritingHelpers.getMarginCallText());
+    setText('margin-assumptions-2', CopywritingHelpers.getMarginCallText());
+    setText('inflation-assumptions', CopywritingHelpers.getInflationText());
+    setText('payment-assumptions', CopywritingHelpers.getPaymentPercentageText());
+    setText('payment-assumptions-2', CopywritingHelpers.getPaymentPercentageText());
+    
+    // Three outcomes
+    setText('margin-ruin', CopywritingHelpers.getMarginCallText());
+    setText('sim-count-ruin', CopywritingHelpers.getSimulationCountText());
+    setText('spread-profit', CopywritingHelpers.getSpreadText());
+    
+    // References
+    setText('interest-reference-1', CopywritingHelpers.getInterestRateText());
+    setText('interest-reference-1b', CopywritingHelpers.getInterestRateText());
+    setText('growth-reference-1', CopywritingHelpers.getGrowthRateText());
+    setText('spread-reference-1', CopywritingHelpers.getSpreadText());
+    setText('loan-period-reference-2', DEFAULT_INPUTS.LOAN_PERIOD);
+    setText('interest-reference-2', CopywritingHelpers.getInterestRateText());
+    setText('margin-reference-4', CopywritingHelpers.getMarginCallText());
+    setText('loan-period-reference-5', DEFAULT_INPUTS.LOAN_PERIOD);
+});
+</script>
+
+<script src="scripts/adapter.js"></script>
+<script src="scripts/integration.js"></script>
+<script src="scripts/script.js"></script>
+</body>
+</html>
