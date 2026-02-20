@@ -84,8 +84,8 @@ function setMode(mode) {
     document.getElementById('customMode').className = isStandard ? 'btn-inactive' : 'btn-active';
     
     document.getElementById('modeDescription').innerHTML = isStandard 
-        ? `<p><strong>Standard Mode:</strong> Uses research-backed defaults. Set your budget, collateral, and desired LTV; the calculator determines your loan amount and payment strategy.</p>` 
-        : `<p><strong>Custom Mode:</strong> For power users auditing other lenders, different borrowing costs, or higher-risk margin strategies. All parameters are unlocked including inflation rate; variability and risk increase with inputs.</p>`;
+        ? CopywritingHelpers.getModeStandardDescription() 
+        : CopywritingHelpers.getModeCustomDescription();
     
     const inputs = ['growth', 'vol', 'marginCall'];
     inputs.forEach(id => {
@@ -109,19 +109,27 @@ function setMode(mode) {
         inflationRateInput.style.cursor = isStandard ? 'not-allowed' : '';
     }
     
-    // Hide payment type in Standard Mode
+    // Payment type is always visible in both modes
     const paymentTypeGroup = document.getElementById('paymentTypeGroup');
     if (paymentTypeGroup) {
-        paymentTypeGroup.style.display = isStandard ? 'none' : 'flex';
+        paymentTypeGroup.style.display = 'flex';
     }
     
-    // Show/hide appropriate input groups based on mode
+    // Show LTV slider and loan amount in both modes
+    document.getElementById('ltvSliderGroup').style.display = 'flex';
+    document.getElementById('loanAmountGroup').style.display = 'flex';
+    
+    // Configure LTV slider and loan amount based on mode
+    const ltvSlider = document.getElementById('ltvSlider');
+    const loanAmountInput = document.getElementById('loanAmount');
+    
     if (isStandard) {
-        // Show Standard Mode inputs (monthly budget shown in both modes now)
-        document.getElementById('ltvSliderGroup').style.display = 'flex';
-        document.getElementById('loanAmountDisplay').style.display = 'flex';
-        document.getElementById('loanAmountInput').style.display = 'none';
-        document.getElementById('assetInputTypeGroup').style.display = 'none';
+        // Standard Mode: slider max 35%, loan amount readonly, slider enabled to move
+        ltvSlider.max = 35;
+        ltvSlider.disabled = false;
+        loanAmountInput.readOnly = true;
+        loanAmountInput.style.backgroundColor = '#f5f5f5';
+        loanAmountInput.style.cursor = 'not-allowed';
         
         // Lock standard mode parameters
         document.getElementById('interestRate').value = STANDARD_MODE_DEFAULTS.INTEREST_RATE;
@@ -130,95 +138,90 @@ function setMode(mode) {
         document.getElementById('marginCall').value = STANDARD_MODE_DEFAULTS.MARGIN_CALL_LTV;
         document.getElementById('inflationRate').value = STANDARD_MODE_DEFAULTS.INFLATION_RATE;
         
-        // Set payment type to standard but it will be hidden
+        // Set payment type to standard
         document.getElementById('paymentType').value = 'standard';
         
-        // Set assetInputType to collateral
-        document.getElementById('assetInputType').value = 'collateral';
+        // Cap LTV at 35% if it was higher in custom mode
+        let currentLtv = parseFloat(ltvSlider.value);
+        if (currentLtv > STANDARD_MODE_DEFAULTS.MAX_LTV) {
+            currentLtv = STANDARD_MODE_DEFAULTS.MAX_LTV;
+            ltvSlider.value = currentLtv;
+            document.getElementById('ltvDisplay').innerText = currentLtv;
+        }
+        
+        // Reset slider color in standard mode
+        ltvSlider.style.accentColor = '';
         
         // Calculate loan amount from LTV and collateral
         updateLoanFromSlider();
         
         // Calculate min payment from budget
         updateStandardModeFromBudget();
-    } else {
-        // Show Custom Mode inputs (monthly budget shown in both modes now)
-        document.getElementById('ltvSliderGroup').style.display = 'none';
-        document.getElementById('loanAmountDisplay').style.display = 'none';
-        document.getElementById('loanAmountInput').style.display = 'flex';
-        document.getElementById('assetInputTypeGroup').style.display = 'flex';
         
-        // Copy loan amount from standard display to custom input
-        const currentLoanAmount = parseFloat(document.getElementById('loanAmount').value);
-        document.getElementById('loanAmountCustom').value = currentLoanAmount;
+        // Clear LTV warning in standard mode
+        document.getElementById('ltvWarning').style.display = 'none';
+    } else {
+        // Custom Mode: slider max 100%, loan amount editable
+        ltvSlider.max = 100;
+        ltvSlider.disabled = false;
+        loanAmountInput.readOnly = false;
+        loanAmountInput.style.backgroundColor = '';
+        loanAmountInput.style.cursor = '';
         
         document.getElementById('minPayment').value = 0;
         
         // Update budget warning for custom mode
         updateBudgetWarningCustom();
+        
+        // Check and show LTV warnings if applicable
+        validateAndColorLTV();
     }
 
     updatePaymentType();
     syncMinPayment();
 }
 
+
 /**
- * Asset Input Type Toggle (Collateral $ vs LTV %)
+ * Validate and color LTV indicator (Yellow at 35%+, Red at 100%+)
+ * Only used in Custom Mode
  */
-function toggleAssetInput() {
-    const type = document.getElementById('assetInputType').value;
-    const loanAmount = currentMode === 'standard' 
-        ? parseFloat(document.getElementById('loanAmount').value)
-        : parseFloat(document.getElementById('loanAmountCustom').value);
+function validateAndColorLTV() {
+    if (currentMode !== 'custom') return;
     
-    // Update label and tooltip based on type
-    if (type === 'ltv') {
-        document.getElementById('assetLabel').innerText = 'Starting LTV (%)';
-        document.getElementById('assetTooltip').innerText = `Loan-to-Value ratio: percentage of portfolio that is borrowed. ${STANDARD_MODE_DEFAULTS.MAX_LTV}% LTV on a $${(100000 / (STANDARD_MODE_DEFAULTS.MAX_LTV / 100)).toLocaleString()}K portfolio = $100K loan. Higher LTV increases margin call probability.`;
-        document.getElementById('assetValue').value = STANDARD_MODE_DEFAULTS.MAX_LTV;
+    const ltv = parseFloat(document.getElementById('ltvSlider').value);
+    const ltvSlider = document.getElementById('ltvSlider');
+    const ltvWarning = document.getElementById('ltvWarning');
+    const ltvWarningIcon = document.getElementById('ltvWarningIcon');
+    const ltvWarningText = document.getElementById('ltvWarningText');
+    
+    if (ltv >= 100) {
+        // Red slider and warning for over 100% LTV
+        ltvSlider.style.accentColor = '#C62828';
+        ltvWarning.style.display = 'block';
+        ltvWarning.style.background = '#ffebee';
+        ltvWarning.style.borderLeftColor = '#C62828';
+        ltvWarningIcon.textContent = '🚨';
+        ltvWarningText.textContent = 'Loan amount exceeds 100% of collateral. This is extremely risky and may trigger forced liquidation.';
+    } else if (ltv >= 35) {
+        // Yellow slider and warning for 35%+ LTV
+        ltvSlider.style.accentColor = '#ff9800';
+        ltvWarning.style.display = 'block';
+        ltvWarning.style.background = '#fff3cd';
+        ltvWarning.style.borderLeftColor = '#ff9800';
+        ltvWarningIcon.textContent = '⚠️';
+        ltvWarningText.textContent = 'Loan-to-Value ratio exceeds 35%. Standard mode caps at 35% to match historical best practices.';
     } else {
-        document.getElementById('assetLabel').innerText = 'Book Value of Collateral Account ($)';
-        document.getElementById('assetTooltip').innerText = 'The book value of your deposits as reported by your broker. This is typically the original cost basis of deposits, not the current market value. Your broker will provide the difference between book and market value.';
-        document.getElementById('assetValue').value = (loanAmount / (STANDARD_MODE_DEFAULTS.MAX_LTV / 100)).toFixed(0);
+        // Purple slider (default) and no warning
+        ltvSlider.style.accentColor = '#9C27B0';
+        ltvWarning.style.display = 'none';
     }
 }
 
 /**
- * Sync Loan Amount Changes
- */
-function syncLoanAmount() {
-    const type = document.getElementById('assetInputType').value;
-    const loanAmount = parseFloat(document.getElementById('loanAmountCustom').value);
-    
-    // Update the main loanAmount field from custom input
-    document.getElementById('loanAmount').value = loanAmount;
-    
-    // If in collateral mode, update the cash value to maintain MAX_LTV
-    if (type === 'collateral') {
-        document.getElementById('assetValue').value = (loanAmount / (STANDARD_MODE_DEFAULTS.MAX_LTV / 100)).toFixed(0);
-    }
-    
-    // Recalculate minimum payment
-    syncMinPayment();
-    
-    // Update budget warning in custom mode
-    updateBudgetWarningCustom();
-}
-
-/**
- * Sync loan amount from custom input to main field
- */
-function syncLoanAmountFromCustom() {
-    const customAmount = parseFloat(document.getElementById('loanAmountCustom').value);
-    document.getElementById('loanAmount').value = customAmount;
-}
-
-/**
- * Update loan amount based on LTV slider (Standard Mode)
+ * Update loan amount based on LTV slider (all modes)
  */
 function updateLoanFromSlider() {
-    if (currentMode !== 'standard') return;
-    
     const ltv = parseFloat(document.getElementById('ltvSlider').value);
     const collateral = parseFloat(document.getElementById('assetValue').value);
     const loanAmount = (collateral * ltv / 100).toFixed(0);
@@ -226,24 +229,71 @@ function updateLoanFromSlider() {
     document.getElementById('ltvDisplay').innerText = ltv;
     document.getElementById('loanAmount').value = loanAmount;
     
+    // Validate and color LTV if in custom mode
+    if (currentMode === 'custom') {
+        validateAndColorLTV();
+    }
+    
     // Update min payment based on new loan amount
-    updateStandardModeFromBudget();
+    if (currentMode === 'standard') {
+        updateStandardModeFromBudget();
+    } else {
+        updateBudgetWarningCustom();
+    }
+    
+    syncMinPayment();
 }
 
 /**
- * Update loan amount when collateral changes (Standard Mode)
+ * Update loan amount when user edits it directly
+ */
+function updateLoanFromDirectInput() {
+    const loanAmount = parseFloat(document.getElementById('loanAmount').value) || 0;
+    const collateral = parseFloat(document.getElementById('assetValue').value) || 1;
+    const ltv = (loanAmount / collateral * 100);
+    
+    // Update slider and display
+    document.getElementById('ltvSlider').value = ltv;
+    document.getElementById('ltvDisplay').innerText = Math.round(ltv);
+    
+    // Validate and color LTV if in custom mode
+    if (currentMode === 'custom') {
+        validateAndColorLTV();
+    }
+    
+    // Update min payment based on new loan amount
+    if (currentMode === 'standard') {
+        updateStandardModeFromBudget();
+    } else {
+        updateBudgetWarningCustom();
+    }
+    
+    syncMinPayment();
+}
+
+/**
+ * Update loan amount when collateral changes
  */
 function updateLoanFromCollateral() {
-    if (currentMode !== 'standard') return;
-    
     const ltv = parseFloat(document.getElementById('ltvSlider').value);
     const collateral = parseFloat(document.getElementById('assetValue').value);
     const loanAmount = (collateral * ltv / 100).toFixed(0);
     
     document.getElementById('loanAmount').value = loanAmount;
     
+    // Validate and color LTV if in custom mode
+    if (currentMode === 'custom') {
+        validateAndColorLTV();
+    }
+    
     // Update min payment based on new loan amount
-    updateStandardModeFromBudget();
+    if (currentMode === 'standard') {
+        updateStandardModeFromBudget();
+    } else {
+        updateBudgetWarningCustom();
+    }
+    
+    syncMinPayment();
 }
 
 /**
@@ -271,7 +321,7 @@ function updateStandardModeFromBudget() {
     
     if (amortizedPayment > monthlyBudget) {
         warningDiv.style.display = 'block';
-        warningText.textContent = `Your monthly budget ($${monthlyBudget.toFixed(2)}) is less than the full amortization payment ($${amortizedPayment.toFixed(2)}). This means you cannot fully pay off the loan over ${years} years with your current budget.`;
+        warningText.textContent = CopywritingHelpers.getPaymentWarningText(monthlyBudget, amortizedPayment, years);
     } else {
         warningDiv.style.display = 'none';
     }
@@ -299,7 +349,7 @@ function updateBudgetWarningCustom() {
     
     if (amortizedPayment > monthlyBudget) {
         warningDiv.style.display = 'block';
-        warningText.textContent = `Your monthly budget ($${monthlyBudget.toFixed(2)}) is less than the full amortization payment ($${amortizedPayment.toFixed(2)}). This means you cannot fully pay off the loan over ${years} years with your current budget.`;
+        warningText.textContent = CopywritingHelpers.getPaymentWarningText(monthlyBudget, amortizedPayment, years);
     } else {
         warningDiv.style.display = 'none';
     }
@@ -429,7 +479,7 @@ async function runSimulation() {
         return results;
     } catch (error) {
         console.error('[Script] Simulation error:', error);
-        alert('Simulation failed: ' + error.message);
+        alert(CopywritingHelpers.getSimulationErrorMessage(error.message));
         return null;
     }
 }
@@ -445,17 +495,12 @@ function runSimulationLegacy() {
 
     const loan = parseFloat(document.getElementById('loanAmount').value);
     const assetInput = parseFloat(document.getElementById('assetValue').value);
-    const assetType = document.getElementById('assetInputType').value;
     const years = parseFloat(document.getElementById('loanPeriod').value);
     const paymentTypeSelect = document.getElementById('paymentType').value;
     const monthlyBudget = parseFloat(document.getElementById('monthlyBudget').value);
     
-    // Book value of collateral account (your equity)
-    let collateralBookValue = assetType === 'ltv' ? (loan / (assetInput / 100)) : assetInput;
-    // Total portfolio value = book value + borrowed amount (margin)
-    let initialAssets = collateralBookValue + loan;
-    // Your equity is just the book value
-    let initialEquity = collateralBookValue;
+    // Book value of collateral account (always collateral-based)
+    const initialEquity = assetInput;
     
     const annualRate = parseFloat(document.getElementById('interestRate').value) / 100;
     const g = parseFloat(document.getElementById('growth').value) / 100;
@@ -492,6 +537,30 @@ function runSimulationLegacy() {
     const numSteps = UI_CONSTANTS.NUM_STRATEGIES;
     const stepSize = (100 - minPaymentPercent) / (numSteps - 1);
     
+    // Pre-calculate all cash flow schedules (deterministic debt and deposit paths)
+    console.log('[LegacySimulation] Pre-calculating cash flow schedules...');
+    const allSchedules = [];
+    
+    // Benchmark schedule: no debt, just full budget deposits
+    // Now includes T=0 element (months+1 total elements)
+    const benchmarkDeposits = [0]; // T=0: no initial deposit
+    const benchmarkDebt = [0];     // T=0: no initial debt
+    for (let month = 1; month <= months; month++) {
+        benchmarkDeposits.push(monthlyBudget);
+        benchmarkDebt.push(0);
+    }
+    allSchedules.push({ debtPath: benchmarkDebt, depositPath: benchmarkDeposits });
+    
+    // Leveraged strategy schedules
+    for(let i = 0; i < numSteps - 1; i++) {
+        const percentOfMax = minPaymentPercent + (i * stepSize);
+        const payment = (percentOfMax / 100) * maxPayment;
+        
+        const schedule = generateCashFlowSchedule(loan, mRate, payment, monthlyBudget, months);
+        allSchedules.push(schedule);
+    }
+    console.log('[LegacySimulation] ✓ Pre-calculated', allSchedules.length, 'schedules');
+    
     // Calculate 11 payment strategies from minimum to maximum feasible payment (monthly budget)
     for(let i = 0; i < numSteps; i++) {
         const percentOfMax = minPaymentPercent + (i * stepSize);
@@ -504,25 +573,33 @@ function runSimulationLegacy() {
         let finalWealths = [];
         let benchmarkWealths = [];
 
+        // Get pre-calculated deposit and debt paths for this strategy
+        const schedule = allSchedules[i + 1]; // +1 because index 0 is benchmark
+        const depositPath = schedule.depositPath;
+        const debtPath = schedule.debtPath;
+        
         // Track cash flows for each strategy
         const totalBudgeted = monthlyBudget * months;
         const totalDebtPayments = payment * months;
         const totalSurplusInvested = surplus * months;
 
         for (let s = 0; s < leveragedSimulations; s++) {
-            let assets = initialAssets;
-            let debt = loan;
-            let ruined = false;
+            let assets = initialEquity + loan;
             let benchmarkAssets = initialEquity;
+            let ruined = false;
 
-            for (let t = 0; t < months; t++) {
+            // Loop from month 1 to months (paths now include T=0 at index 0)
+            for (let t = 1; t <= months; t++) {
                 const ret = Math.exp((g - 0.5 * vol * vol) * (1/12) + vol * Math.sqrt(1/12) * randn_bm());
-                assets = (assets * ret) + surplus;
+                
+                // Use pre-calculated deposit path (index t corresponds to end of month t)
+                assets = (assets * ret) + depositPath[t];
                 benchmarkAssets = (benchmarkAssets * ret) + monthlyBudget;
                 
-                debt = (debt * (1 + mRate)) - payment;
+                // Use pre-calculated debt path (index t corresponds to debt at end of month t)
+                const debt = debtPath[t];
 
-                if (debt / assets > marginCallLTV) { 
+                if (debt / assets > marginCallLTV) {
                     ruined = true; 
                     break; 
                 }
@@ -530,7 +607,9 @@ function runSimulationLegacy() {
 
             if (!ruined) {
                 survivedCount++;
-                const nominalWealth = assets - debt;
+                // Calculate final wealth using last debt value (at month index = months)
+                const finalDebt = debtPath[months];
+                const nominalWealth = assets - finalDebt;
                 
                 // Convert to Real Dollars: RealWealth = NominalWealth / (1 + InflationRate)^Years
                 const realWealth = nominalWealth / Math.pow(1 + inflationRate, years);
@@ -548,7 +627,8 @@ function runSimulationLegacy() {
         for (let s = leveragedSimulations; s < benchmarkSimulations; s++) {
             let benchmarkAssets = initialEquity;
 
-            for (let t = 0; t < months; t++) {
+            // Loop from month 1 to months
+            for (let t = 1; t <= months; t++) {
                 const ret = Math.exp((g - 0.5 * vol * vol) * (1/12) + vol * Math.sqrt(1/12) * randn_bm());
                 benchmarkAssets = (benchmarkAssets * ret) + monthlyBudget;
             }
@@ -599,7 +679,9 @@ function runSimulationLegacy() {
             totalBudgeted,
             totalDebtPayments,
             totalInvested: totalSurplusInvested,
-            totalInterestPaid: (totalDebtPayments - loan)
+            totalInterestPaid: (totalDebtPayments - loan),
+            debtPath: schedule.debtPath,
+            depositPath: schedule.depositPath
         });
     }
 
@@ -618,7 +700,6 @@ function runSimulationLegacy() {
 
     const loanDetails = {
         loanAmount: loan,
-        initialAssets: initialAssets,
         initialEquity: initialEquity,
         months: months,
         amortizedPayment: amortizedPayment,
@@ -631,10 +712,14 @@ function runSimulationLegacy() {
     // Store results globally for slider interaction
     simulationResults = {
         strategies: results,
-        loanDetails: loanDetails
+        loanDetails: loanDetails,
+        benchmark: {
+            debtPath: allSchedules[0].debtPath,
+            depositPath: allSchedules[0].depositPath
+        }
     };
     
-    displayResults(results, amortizedPayment, loanDetails);
+    displayResults(simulationResults);
 
     return simulationResults;
 }
@@ -674,9 +759,9 @@ function findTargetStrategyIndex(targetSurvival) {
  * Calculate Trinary Outcome Statistics
  * Categorizes 100% of outcomes into: Ruin, Sucker, Profit
  * 
- * Ruin: Margin call (wealth = $0)
+ * Ruin: Margin call (wealth = $0) OR ended with wealth < initial equity
  * Profit: Survived AND final wealth > benchmark median
- * Sucker: Survived BUT final wealth < benchmark median
+ * Sucker: Survived AND initial equity <= wealth <= benchmark median
  */
 function calculateTrinaryStats(strategyIndex) {
     if (!simulationResults) return null;
@@ -684,22 +769,25 @@ function calculateTrinaryStats(strategyIndex) {
     const strategy = simulationResults.strategies[strategyIndex];
     const leveragedWealths = strategy.finalWealthArray;
     const benchmarkMedian = strategy.benchmarkMedian;
+    const initialEquity = simulationResults.loanDetails.initialEquity;
     
     const totalSimulations = UI_CONSTANTS.SIMULATION_COUNT;
     const survivors = leveragedWealths.length;
-    const ruined = totalSimulations - survivors;
+    const marginCalls = totalSimulations - survivors;
     
-    // RUIN: Any simulation that hit a margin call
-    const ruinPercent = (ruined / totalSimulations) * 100;
+    // RUIN: Margin call OR ended with less than initial equity
+    const lostMoney = leveragedWealths.filter(w => w < initialEquity).length;
+    const ruinCount = marginCalls + lostMoney;
+    const ruinPercent = (ruinCount / totalSimulations) * 100;
     
-    // Among survivors, categorize by benchmark comparison
-    const profitSurvivors = leveragedWealths.filter(w => w > benchmarkMedian).length;
-    const suckerSurvivors = survivors - profitSurvivors;
+    // Among survivors who didn't lose money, categorize by benchmark comparison
+    const profitSurvivors = leveragedWealths.filter(w => w >= initialEquity && w > benchmarkMedian).length;
+    const suckerSurvivors = leveragedWealths.filter(w => w >= initialEquity && w <= benchmarkMedian).length;
     
-    // PROFIT: Survived AND outperformed benchmark
+    // PROFIT: Survived with profit AND outperformed benchmark
     const profitPercent = (profitSurvivors / totalSimulations) * 100;
     
-    // SUCKER: Survived BUT underperformed benchmark
+    // SUCKER: Survived with profit BUT underperformed benchmark
     const suckerPercent = (suckerSurvivors / totalSimulations) * 100;
     
     // Verify: Ruin % + Sucker % + Profit % = 100%
@@ -709,7 +797,7 @@ function calculateTrinaryStats(strategyIndex) {
         ruinPercent: Math.max(0, ruinPercent),
         suckerPercent: Math.max(0, suckerPercent),
         profitPercent: Math.max(0, profitPercent),
-        ruinCount: ruined,
+        ruinCount: ruinCount,
         profitCount: profitSurvivors,
         suckerCount: suckerSurvivors,
         totalSims: totalSimulations,
@@ -721,144 +809,41 @@ function calculateTrinaryStats(strategyIndex) {
  * Generate Verdict Based on Trinary Outcomes (Ruin/Sucker/Profit)
  * 
  * Professional Trading Standards - Status Logic:
- * - Red Status (DANGEROUS): Ruin > 5%
+ * - Red Status (DANGEROUS): Ruin > 5% (unacceptable - includes both margin calls and losses)
  * - Orange Status (POINTLESS): Profit % - Sucker % < 10% (and Ruin <= 5%)
- * - Grey Status (MARGINAL): 10% <= Spread < 20% (positive edge but risky, likely underperforming years)
- * - Green Status (STRONG): Spread >= 20% AND Ruin < 2% (drift is statistically powerful)
+ * - Grey Status (MARGINAL): Ruin 2-5% OR spread 10-20% (moderate edge or elevated risk)
+ * - Green Status (STRONG): Spread >= 20% AND Ruin < 2% (strong edge with contained risk)
+ * 
+ * Note: Ruin includes BOTH margin call liquidations AND ending with wealth < initial equity.
+ * All ruin is treated equally regardless of the specific failure mode.
  */
-function generateVerdict(trinaryStats) {
-    if (!trinaryStats) return null;
-    
-    const { ruinPercent, suckerPercent, profitPercent } = trinaryStats;
-    const spreadPercent = profitPercent - suckerPercent;
-    
-    // Professional thresholds
-    const POINTLESS_CEILING = 10.0;    // Below 10% spread = garbage
-    const STRONG_FLOOR = 20.0;         // 20%+ spread = statistically powerful
-    
-    const isDangerous = ruinPercent > 5.0;
-    const isPointless = spreadPercent < POINTLESS_CEILING && !isDangerous;
-    const isStrong = spreadPercent >= STRONG_FLOOR && ruinPercent < 2.0;
-    const isMarginal = spreadPercent >= POINTLESS_CEILING && spreadPercent < STRONG_FLOOR && !isDangerous;
-    
-    let status = null;
-    let color = null;
-    let icon = null;
-    let title = null;
-    let message = null;
-    let fixSuggestion = null;
-    
-    if (isDangerous) {
-        // RED: Ruin > 5% - Too much risk of total loss
-        status = 'DANGEROUS';
-        color = '#B3261E';
-        icon = '⛔';
-        title = 'DANGEROUS: UNACCEPTABLE RUIN RISK';
-        message = `You have a <strong>${ruinPercent.toFixed(1)}%</strong> chance of forced liquidation (margin call = total loss). This exceeds acceptable risk tolerance. Reduce borrowed principal or increase monthly payment significantly.`;
-        fixSuggestion = generateDiagnosticFix('dangerous', trinaryStats);
-    } else if (isPointless) {
-        // ORANGE: Spread < 10% - Below minimum viability
-        status = 'POINTLESS';
-        color = '#FF9800';
-        icon = '⚠️';
-        title = 'POINTLESS: ODDS UNFAVORABLE';
-        message = `The probability of outperforming a standard no-debt investment is <strong>${profitPercent.toFixed(1)}%</strong>. Underperformance probability is <strong>${(suckerPercent + ruinPercent).toFixed(1)}%</strong> combined (liquidation or negative spread). The borrowing cost exceeds the investment return advantage.`;
-        fixSuggestion = generateDiagnosticFix('pointless', trinaryStats);
-    } else if (isMarginal) {
-        // GREY: 10% <= Spread < 20% - Positive expectancy but risky
-        status = 'MARGINAL';
-        color = '#AFAFAF';
-        icon = '🤔';
-        title = 'MARGINAL: LOW EDGE WITH RUIN RISK';
-        message = `Spread advantage: <strong>${spreadPercent.toFixed(1)}%</strong> per year. Profit probability: <strong>${profitPercent.toFixed(1)}%</strong>. Underperformance probability: <strong>${suckerPercent.toFixed(1)}%</strong>. Liquidation probability: <strong>${ruinPercent.toFixed(1)}%</strong>. The spread advantage exists but is below industry-standard thresholds (>20%) for confidence. Expect portfolio volatility during downturns.`;
-        fixSuggestion = generateDiagnosticFix('marginal', trinaryStats);
-    } else if (isStrong) {
-        // GREEN: Spread >= 20% AND Ruin < 2% - Statistically powerful edge
-        status = 'STRONG';
-        color = '#1B5E20';
-        icon = '✅';
-        title = 'STRONG: FAVORABLE RISK-REWARD RATIO';
-        message = `Spread advantage: <strong>${spreadPercent.toFixed(1)}%</strong> per year. Profit probability: <strong>${profitPercent.toFixed(1)}%</strong>. Liquidation risk: <strong>${ruinPercent.toFixed(1)}%</strong>. The spread is sufficient to meet industry standards (>20%) with liquidation risk contained below 2%. The strategy has mathematical justification relative to risk.`;
-        fixSuggestion = null;  // No fix needed for strong strategies
-    } else {
-        // Fallback (should not reach here)
-        status = 'MARGINAL';
-        color = '#AFAFAF';
-        icon = '🤔';
-        title = 'MARGINAL: INSUFFICIENT DATA';
-        message = `Spread: <strong>${spreadPercent.toFixed(1)}%</strong>. Ruin probability: <strong>${ruinPercent.toFixed(1)}%</strong>. Classification: marginal strategy with limited advantage.`;
-        fixSuggestion = generateDiagnosticFix('marginal', trinaryStats);
-    }
-    
-    return {
-        status,
-        color,
-        icon,
-        title,
-        message,
-        ruinPercent,
-        suckerPercent,
-        profitPercent,
-        spread: spreadPercent,
-        fixSuggestion
-    };
-}
-
-/**
- * Generate Diagnostic Fix Suggestions Based on Outcome Category
- * Provides actionable advice on how to improve the strategy
- */
-function generateDiagnosticFix(category, trinaryStats) {
-    const { ruinPercent, suckerPercent, profitPercent } = trinaryStats;
-    
-    let fixes = [];
-    
-    if (category === 'dangerous') {
-        // DANGEROUS: Ruin > 5% - Portfolio cannot survive a standard market crash
-        fixes.push("<strong>Reduce your Loan Amount.</strong> Your borrowed capital is too large relative to your safety buffer. Avoid borrowing more than a third of your portfolio's value.");
-        fixes.push("<strong>Add More Collateral.</strong> Deposit additional cash into your account without borrowing more. This strengthens your cushion against margin calls.");
-        fixes.push("<strong>Increase Monthly Payment.</strong> Pay down the loan faster before a crash occurs. The longer you stay leveraged, the higher your ruin risk.");
-    } else if (category === 'pointless') {
-        // POINTLESS: Spread < 10% - Interest drag equals market drift; no compensation for risk
-        fixes.push("<strong>Check Your Interest Rate.</strong> If you're paying more than 7-8% annual interest, leverage rarely works mathematically. Consider switching to a lower-cost loan or margin product.");
-        fixes.push("<strong>Increase Your Monthly Budget.</strong> Pay down the principal faster. Leverage works best when your debt is a shrinking percentage of your assets.");
-        fixes.push("<strong>Extend Your Time Horizon.</strong> If your simulation is under 10 years, short-term volatility is drowning out long-term gains. Leverage needs time to compound.");
-    } else if (category === 'marginal') {
-        // MARGINAL: 10% <= Spread < 20% - Positive expectancy, but low reward-to-risk ratio
-        fixes.push("<strong>Lower Your LTV by 5%.</strong> Often, a small reduction in borrowed capital significantly increases your spread by reducing interest costs and ruin risk together.");
-        fixes.push("<strong>Invest Your Monthly Surplus.</strong> Ensure the money you don't use for debt payments goes into growth assets (stocks/ETFs), not cash. If you're holding cash, you're wasting the leverage benefit.");
-        fixes.push("<strong>Test Interest Rate Risk.</strong> Try to increase your interest rate by 1%. If this strategy becomes \"Pointless,\" it's too fragile. You need more cushion.");
-    }
-    
-    return fixes.length > 0 ? fixes : null;
-}
-
 /**
  * Render Histogram for a Specific Strategy
  * Uses "0 to Mean + 1 Sigma" filtering for performance and ethical display
  */
 function renderHistogram(strategyIndex) {
     console.log('[Histogram] renderHistogram called with index:', strategyIndex);
-    console.log('[Histogram] simulationResults:', simulationResults);
     
     if (!simulationResults) {
-        console.error('[Histogram] No simulationResults available');
+        console.error('[Histogram] No simulationResults available from integration layer');
+        document.getElementById('histogramChart').innerHTML = '<p style="text-align:center;color:red;">Error: No simulation results from integration layer</p>';
         return;
     }
     
-    console.log('[Histogram] Number of strategies:', simulationResults.strategies?.length);
     const strategy = simulationResults.strategies[strategyIndex];
-    console.log('[Histogram] Selected strategy:', strategy);
-    
     const wealthData = strategy.finalWealthArray;
     const benchmarkData = strategy.benchmarkWealthArray;
+    const initialEquity = simulationResults.loanDetails.initialEquity;
     
-    console.log('[Histogram] Wealth data length:', wealthData?.length);
-    console.log('[Histogram] Benchmark data length:', benchmarkData?.length);
+    if (!wealthData || !benchmarkData) {
+        console.error('[Histogram] Integration layer did not provide complete wealth arrays');
+        document.getElementById('histogramChart').innerHTML = '<p style="text-align:center;color:red;">Error: Integration layer did not provide complete data</p>';
+        return;
+    }
     
     if (wealthData.length === 0 || benchmarkData.length === 0) {
-        console.warn('[Histogram] Empty data arrays - no simulations survived');
-        document.getElementById('histogramChart').innerHTML = '<p style="text-align:center;color:var(--md-error);">No data available - all simulations resulted in margin calls.</p>';
+        console.warn('[Histogram] Empty data arrays - all simulations resulted in ruin');
+        document.getElementById('histogramChart').innerHTML = '<p style="text-align:center;color:var(--md-error);">No data available - all simulations resulted in ruin.</p>';
         return;
     }
     
@@ -948,23 +933,24 @@ function renderHistogram(strategyIndex) {
     const benchmarkMedianWealth = strategy.benchmarkMedian;
     
     // 4.2 Create separate arrays for ruin, underperformed, and overperformed outcomes
+    // RUIN: Either margin call (x=0) OR lost money (x < initialEquity)
     const ruinProb = [];
     const underperformedProb = [];
     const overperformedProb = [];
     
     xLabels.forEach((x, i) => {
-        if (x === 0) {
-            // Ruin outcomes (margin call)
+        if (x === 0 || x < initialEquity) {
+            // Ruin outcomes: margin call OR ended with less than initial equity
             ruinProb.push(leveragedProb[i]);
             underperformedProb.push(0);
             overperformedProb.push(0);
         } else if (x < benchmarkMedianWealth) {
-            // Underperformed vs benchmark
+            // Sucker: survived with profit but underperformed benchmark
             ruinProb.push(0);
             underperformedProb.push(leveragedProb[i]);
             overperformedProb.push(0);
         } else {
-            // Overperformed vs benchmark
+            // Profit: survived and overperformed benchmark
             ruinProb.push(0);
             underperformedProb.push(0);
             overperformedProb.push(leveragedProb[i]);
@@ -976,7 +962,7 @@ function renderHistogram(strategyIndex) {
         x: xLabels,
         y: ruinProb,
         type: 'bar',
-        name: 'Ruin (Margin Call)',
+        name: 'Ruin (Loss or Liquidation)',
         marker: {
             color: UI_CONSTANTS.HISTOGRAM_COLORS.ruin,
             opacity: UI_CONSTANTS.HISTOGRAM_COLORS.ruinOpacity,
@@ -1086,9 +1072,6 @@ function renderHistogram(strategyIndex) {
     return Plotly.newPlot('histogramChart', [benchmarkTrace, ruinTrace, underperformedTrace, overperformedTrace], layout, config);
 }
 
-/**
- * Update Dynamic Summary for a Specific Strategy
- */
 function updateSummary(strategyIndex) {
     if (!simulationResults) return;
     
@@ -1097,18 +1080,19 @@ function updateSummary(strategyIndex) {
     
     // Calculate trinary statistics (Ruin/Sucker/Profit)
     const trinaryStats = calculateTrinaryStats(strategyIndex);
-    const verdict = generateVerdict(trinaryStats);
+    const verdict = CopywritingHelpers.generateVerdict(trinaryStats);
     
     const summaryBox = document.getElementById('dynamicSummary');
     const monthlyBudget = loanDetails.monthlyBudget;
-    const amortizedPayment = loanDetails.amortizedPayment;
     const debtPayment = strategy.paymentAmount;
     const marketInvestment = strategy.surplusAmount;
     const medianRealWealth = strategy.medianWealth;
     const survivalRate = strategy.survivalRate;
     const benchmarkMedian = strategy.benchmarkMedian;
     const delta = medianRealWealth - benchmarkMedian;
-    const deltaPrefix = delta >= 0 ? '+' : '-';
+
+    // Get narrative text from copywriting helpers
+    const narrative = CopywritingHelpers.getStrategySummaryNarrative(monthlyBudget, debtPayment, marketInvestment, survivalRate, medianRealWealth, benchmarkMedian, delta);
 
     // Build the summary HTML with verdict
     let summaryHTML = `
@@ -1125,7 +1109,7 @@ function updateSummary(strategyIndex) {
             <div style="background: #ffebee; border-left: 4px solid #B3261E; padding: 16px; border-radius: 4px; text-align: center;">
                 <div style="font-size: 28px; font-weight: bold; color: #B3261E;">${trinaryStats.ruinPercent.toFixed(1)}%</div>
                 <div style="font-size: 0.9rem; color: #666; font-weight: 600;">RUIN</div>
-                <div style="font-size: 0.75rem; color: #999;">Margin Call</div>
+                <div style="font-size: 0.75rem; color: #999;">Loss/Liquidation</div>
             </div>
             <div style="background: #fff3e0; border-left: 4px solid #FF9800; padding: 16px; border-radius: 4px; text-align: center;">
                 <div style="font-size: 28px; font-weight: bold; color: #FF9800;">${trinaryStats.suckerPercent.toFixed(1)}%</div>
@@ -1139,11 +1123,11 @@ function updateSummary(strategyIndex) {
             </div>
         </div>
 
-                <p>You have a monthly budget of <strong>$${monthlyBudget.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> for debt payments and investments.</p>
-        <p>With this strategy, you pay <strong>$${debtPayment.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> to the lender and invest the remaining <strong>$${marketInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> into a low-cost S&P 500 ETF.</p>
-        <p>This allocation results in a <strong>${survivalRate.toFixed(1)}%</strong> probability of survival. In the expected case, your Real Wealth (in today's purchasing power) is <strong>$${medianRealWealth.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong>.</p>
-        <p><strong>Baseline Comparison:</strong> If you simply invested your <strong>$${monthlyBudget.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> monthly budget into the S&P 500 without borrowing, you would likely end up with <strong>$${benchmarkMedian.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong>.</p>
-        <p><strong>Leverage Impact: ${deltaPrefix}$${Math.abs(delta).toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></p>
+        <p>${narrative.allocation}</p>
+        <p>${narrative.paymentBreakdown}</p>
+        <p>${narrative.outcomes}</p>
+        <p><strong>${narrative.baseline}</strong></p>
+        <p><strong>${narrative.leverageImpact}</strong></p>
         
         <hr style="margin-top: 20px; margin-bottom: 20px; border: none; border-top: 1px solid #E0E0E0;">
         
@@ -1161,8 +1145,8 @@ function updateSummary(strategyIndex) {
                 </thead>
                 <tbody>
                     <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #E0E0E0;"><strong style="color: #B3261E;">Ruin</strong></td>
-                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">&le; 2%</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #E0E0E0;"><strong style="color: #B3261E;">${CopywritingHelpers.getSuccessCriteriaLabel('ruin')}</strong></td>
+                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">${CopywritingHelpers.getSuccessCriteriaThreshold('ruin')}</td>
                         <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">${trinaryStats.ruinPercent.toFixed(1)}%</td>
                         <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">
                             <span style="font-weight: 600; color: ${trinaryStats.ruinPercent < 2 ? '#1B5E20' : '#B3261E'};">
@@ -1171,8 +1155,8 @@ function updateSummary(strategyIndex) {
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #E0E0E0;"><strong style="color: #FF9800;">Sucker</strong></td>
-                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">Lower is Better</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #E0E0E0;"><strong style="color: #FF9800;">${CopywritingHelpers.getSuccessCriteriaLabel('sucker')}</strong></td>
+                        <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">${CopywritingHelpers.getSuccessCriteriaThreshold('sucker')}</td>
                         <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">${trinaryStats.suckerPercent.toFixed(1)}%</td>
                         <td style="padding: 10px; text-align: center; border-bottom: 1px solid #E0E0E0;">
                             <span style="font-weight: 600; color: ${trinaryStats.suckerPercent < trinaryStats.profitPercent ? '#1B5E20' : '#FF9800'};">
@@ -1181,8 +1165,8 @@ function updateSummary(strategyIndex) {
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 10px;"><strong style="color: #1B5E20;">Profit</strong></td>
-                        <td style="padding: 10px; text-align: center;">&ge; 20% Spread*</td>
+                        <td style="padding: 10px;"><strong style="color: #1B5E20;">${CopywritingHelpers.getSuccessCriteriaLabel('profit')}</strong></td>
+                        <td style="padding: 10px; text-align: center;">${CopywritingHelpers.getSuccessCriteriaThreshold('profit')}</td>
                         <td style="padding: 10px; text-align: center;">${trinaryStats.profitPercent.toFixed(1)}%</td>
                         <td style="padding: 10px; text-align: center;">
                             <span style="font-weight: 600; color: ${verdict.spread > 20 && trinaryStats.ruinPercent < 2 ? '#1B5E20' : '#FF9800'};">
@@ -1193,7 +1177,7 @@ function updateSummary(strategyIndex) {
                 </tbody>
             </table>
             <p style="font-size: 0.75rem; color: #999; margin-top: 10px; margin-bottom: 0;">
-                *Spread = Profit % minus Sucker %. A 51/49 split is a coin flip; a 60/40 split is a strategy.
+                ${CopywritingHelpers.getSuccessCriteriaNoteText()}
             </p>
         </div>
     `;
@@ -1203,7 +1187,7 @@ function updateSummary(strategyIndex) {
         const fixListHTML = verdict.fixSuggestion.map(fix => `<li style="margin: 8px 0; line-height: 1.5;">${fix}</li>`).join('');
         summaryHTML += `
         <div style="margin-top: 24px; background: #FFF8E1; border-left: 4px solid #FF9800; padding: 16px; border-radius: 4px;">
-            <h4 style="margin-top: 0; color: #F57F17;">How to Fix Your Strategy</h4>
+            <h4 style="margin-top: 0; color: #F57F17;">${CopywritingHelpers.getFixStrategyHeaderText()}</h4>
             <ul style="margin: 12px 0; padding-left: 20px;">
                 ${fixListHTML}
             </ul>
@@ -1212,6 +1196,158 @@ function updateSummary(strategyIndex) {
     }
     
     summaryBox.innerHTML = summaryHTML;
+}
+
+/**
+ * Render Deposits Over Time Line Chart
+ * Uses pre-calculated cash flow schedules from simulation results
+ */
+function renderDepositsLineChart(strategyIndex) {
+    console.log('[DepositsLineChart] renderDepositsLineChart called with index:', strategyIndex);
+    
+    if (!simulationResults) {
+        console.error('[DepositsLineChart] No simulationResults available');
+        return;
+    }
+    
+    const strategy = simulationResults.strategies[strategyIndex];
+    const benchmark = simulationResults.benchmark;
+    const loanDetails = simulationResults.loanDetails;
+    
+    console.log('[DepositsLineChart] Strategy data:', {
+        hasDepositPath: !!strategy.depositPath,
+        hasDebtPath: !!strategy.debtPath,
+        depositPathLength: strategy.depositPath?.length,
+        debtPathLength: strategy.debtPath?.length
+    });
+    
+    // Integration layer must provide complete data
+    if (!strategy.depositPath || !strategy.debtPath || !benchmark.depositPath) {
+        console.error('[DepositsLineChart] Missing cash flow schedules from integration layer');
+        document.getElementById('depositsLineChart').innerHTML = '<p style="color: red; text-align: center;">Error: Integration layer did not provide complete schedule data</p>';
+        return;
+    }
+    
+    const months = loanDetails.months;
+    
+    // Generate time points (years)
+    const timePoints = [];
+    for (let month = 0; month <= months; month++) {
+        timePoints.push(month / 12);
+    }
+    
+    // Calculate cumulative deposits - depositPath now includes T=0 initial capital at index 0
+    const nonLeverageDeposits = [];
+    const leverageDeposits = [];
+    const debtBalance = [];
+    
+    let nonLeverageSum = 0;
+    let leverageSum = 0;
+    
+    for (let month = 0; month <= months; month++) {
+        // depositPath[0] = initial capital at T=0
+        // depositPath[1..months] = monthly contributions
+        // Cumulative at month M = sum of depositPath[0..M]
+        if (month < benchmark.depositPath.length) {
+            nonLeverageSum += benchmark.depositPath[month] || 0;
+        }
+        if (month < strategy.depositPath.length) {
+            leverageSum += strategy.depositPath[month] || 0;
+        }
+        
+        nonLeverageDeposits.push(nonLeverageSum);
+        leverageDeposits.push(leverageSum);
+        
+        // Debt balance: debtPath[month] is debt at end of month
+        const debtAtMonth = month < strategy.debtPath.length ? strategy.debtPath[month] : 0;
+        debtBalance.push(debtAtMonth);
+    }
+    
+    console.log('[DepositsLineChart] Cumulative deposits calculated');
+    console.log('[DepositsLineChart] Sample data:', {
+        month0: { nonLeverage: nonLeverageDeposits[0], leverage: leverageDeposits[0], debt: debtBalance[0] },
+        month6: { nonLeverage: nonLeverageDeposits[6], leverage: leverageDeposits[6], debt: debtBalance[6] },
+        monthEnd: { nonLeverage: nonLeverageDeposits[months], leverage: leverageDeposits[months], debt: debtBalance[months] }
+    });
+    
+    // Create Plotly traces
+    const nonLeverageTrace = {
+        x: timePoints,
+        y: nonLeverageDeposits,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Total Deposits (No Leverage)',
+        line: {
+            color: '#2196F3',  // Blue
+            width: 3
+        },
+        hovertemplate: '<b>No Leverage</b><br>Time: %{x:.1f} years<br>Total Deposits: $%{y:,.0f}<extra></extra>'
+    };
+    
+    const leverageTrace = {
+        x: timePoints,
+        y: leverageDeposits,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Total Deposits (With Leverage)',
+        line: {
+            color: '#9C27B0',  // Purple
+            width: 3
+        },
+        hovertemplate: '<b>With Leverage</b><br>Time: %{x:.1f} years<br>Total Deposits: $%{y:,.0f}<extra></extra>'
+    };
+    
+    const debtTrace = {
+        x: timePoints,
+        y: debtBalance,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Debt Balance (Principal + Accrued Interest)',
+        line: {
+            color: '#F44336',  // Red
+            width: 3,
+            dash: 'dash'
+        },
+        hovertemplate: '<b>Remaining Debt</b><br>Time: %{x:.1f} years<br>Balance: $%{y:,.0f}<extra></extra>'
+    };
+    
+    // Create layout
+    const layout = {
+        title: `Present Value of Deposits Over Time (Strategy ${strategyIndex + 1})`,
+        xaxis: {
+            title: 'Time (Years)',
+            tickformat: '.1f'
+        },
+        yaxis: {
+            title: 'Value (Today\'s Dollars)',
+            tickformat: '$,.0f'
+        },
+        hovermode: 'x unified',
+        margin: { t: 80, b: 80, l: 80, r: 200 },
+        autosize: true,
+        plot_bgcolor: '#f9f9f9',
+        paper_bgcolor: '#ffffff',
+        legend: {
+            x: 1.02,
+            xanchor: 'left',
+            y: 1,
+            yanchor: 'top',
+            bgcolor: 'rgba(255, 255, 255, 0.9)',
+            bordercolor: '#ddd',
+            borderwidth: 1
+        }
+    };
+    
+    // Plotly config for responsive display
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false
+    };
+    
+    // Render chart
+    console.log('[DepositsLineChart] Rendering chart...');
+    return Plotly.newPlot('depositsLineChart', [nonLeverageTrace, leverageTrace, debtTrace], layout, config);
 }
 
 /**
@@ -1278,6 +1414,10 @@ function displayResults(results) {
     // Then render histogram with proper sizing
     console.log('[DisplayResults] Rendering histogram for strategy index:', targetIndex);
     renderHistogram(targetIndex);
+    
+    // Render deposits over time line chart
+    console.log('[DisplayResults] Rendering deposits line chart for strategy index:', targetIndex);
+    renderDepositsLineChart(targetIndex);
 }
 
 /**
@@ -1287,6 +1427,7 @@ function handleSliderChange(event) {
     const strategyIndex = parseInt(event.target.value);
     updateSliderPills(strategyIndex);
     renderHistogram(strategyIndex);
+    renderDepositsLineChart(strategyIndex);
     updateSummary(strategyIndex);
 }
 
@@ -1374,8 +1515,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loanPeriod').value = DEFAULT_INPUTS.LOAN_PERIOD;
     document.getElementById('monthlyBudget').value = DEFAULT_INPUTS.MONTHLY_BUDGET;
     document.getElementById('assetValue').value = DEFAULT_INPUTS.COLLATERAL_VALUE;
+    
+    // Initialize LTV slider with correct starting value
     document.getElementById('ltvSlider').value = DEFAULT_INPUTS.STARTING_LTV;
     document.getElementById('ltvDisplay').innerText = DEFAULT_INPUTS.STARTING_LTV;
+    
+    // Calculate and set initial loan amount
+    const initialLoanAmount = (DEFAULT_INPUTS.COLLATERAL_VALUE * DEFAULT_INPUTS.STARTING_LTV / 100).toFixed(0);
+    document.getElementById('loanAmount').value = initialLoanAmount;
     
     // Set initial mode to standard
     setMode('standard');

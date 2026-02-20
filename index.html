@@ -84,6 +84,18 @@
         </div>
     </div>
 
+    <!-- Warnings Container -->
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+        <!-- LTV Warning Display -->
+        <div id="ltvWarning" style="display: none; padding: 15px; border-radius: 6px;">
+            <strong id="ltvWarningIcon">⚠️</strong> <span id="ltvWarningText"></span>
+        </div>
+        <!-- Budget Warning Display -->
+        <div id="budgetWarning" style="display: none; background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800;">
+            <strong>⚠️ Budget Warning:</strong> <span id="budgetWarningText"></span>
+        </div>
+    </div>
+
     <div class="grid">
         <div class="input-group">
             <div class="label-wrapper">
@@ -91,7 +103,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">Planned holding period for debt repayment. Longer periods increase recovery probability from downturns and extend exposure to adverse events. Outcome distribution changes with this parameter.</div>
             </div>
-            <input type="number" id="loanPeriod" value="40" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
+            <input type="number" id="loanPeriod" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
         </div>
         <div class="input-group" id="monthlyBudgetGroup">
             <div class="label-wrapper">
@@ -99,7 +111,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">Your total monthly budget available for debt payments and investments. This becomes your theoretical maximum monthly payment. Any amount not used for debt service will be invested monthly.</div>
             </div>
-            <input type="number" id="monthlyBudget" value="500" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
+            <input type="number" id="monthlyBudget" onchange="handleBudgetOrPeriodChange()" oninput="handleBudgetOrPeriodChange()">
         </div>
         <div class="input-group">
             <div class="label-wrapper">
@@ -107,7 +119,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup" id="assetTooltip">The total value of your investment account that's backing the loan. If you have $100K in stocks, that's your collateral. The calculator uses this to determine Loan-to-Value—if you borrow $60K against $100K, that's 60% LTV.</div>
             </div>
-            <input type="number" id="assetValue" value="28571" step="1" onchange="updateLoanFromCollateral()" oninput="updateLoanFromCollateral()">
+            <input type="number" id="assetValue" step="1" onchange="updateLoanFromCollateral()" oninput="updateLoanFromCollateral()">
         </div>
         <div class="input-group" id="ltvSliderGroup">
             <div class="label-wrapper">
@@ -116,40 +128,17 @@
                 <div class="tooltip-popup">Loan-to-Value ratio as a percentage of collateral. At 0%, no borrowing occurs. <span id="max-ltv-tooltip"></span> is the maximum LTV threshold in Standard Mode.</div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
-                <input type="range" id="ltvSlider" min="0" max="35" step="1" value="35" oninput="updateLoanFromSlider()" style="flex: 1;">
-                <div style="min-width: 50px; font-weight: 600; color: #2196F3; text-align: right;"><span id="ltvDisplay">35</span>%</div>
+                <input type="range" id="ltvSlider" min="0" max="35" step="1" value="20" oninput="updateLoanFromSlider()" style="flex: 1;">
+                <div style="min-width: 50px; font-weight: 600; color: #2196F3; text-align: right;"><span id="ltvDisplay">20</span>%</div>
             </div>
         </div>
-        <div class="input-group" id="loanAmountDisplay">
+        <div class="input-group" id="loanAmountGroup">
             <div class="label-wrapper">
                 <label>Loan Amount ($)</label>
                 <div class="tooltip-icon">?</div>
-                <div class="tooltip-popup">Calculated from your collateral and LTV ratio. This is the amount borrowed from the lender to invest.</div>
+                <div class="tooltip-popup">Amount borrowed from the lender to invest. Calculated from your collateral and LTV ratio in Standard Mode. Directly editable in Custom Mode.</div>
             </div>
-            <input type="number" id="loanAmount" value="10000" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
-        </div>
-        <!-- Budget Warning Display -->
-        <div id="budgetWarning" style="display: none; grid-column: 1 / -1; background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800; margin: 10px 0;">
-            <strong>⚠️ Budget Warning:</strong> <span id="budgetWarningText"></span>
-        </div>
-        <div class="input-group" id="assetInputTypeGroup">
-            <div class="label-wrapper">
-                <label>Collateral Input Type</label>
-                <div class="tooltip-icon">?</div>
-                <div class="tooltip-popup">Choose how the starting position is defined: as a Loan-to-Value ratio (what % of the portfolio is borrowed) or as total cash value.</div>
-            </div>
-            <select id="assetInputType" onchange="toggleAssetInput()">
-                <option value="collateral">Book Value of Collateral Account ($)</option>
-                <option value="ltv">Starting LTV (%)</option>
-            </select>
-        </div>
-        <div class="input-group" id="loanAmountInput" style="display: none;">
-            <div class="label-wrapper">
-                <label>Loan Amount ($)</label>
-                <div class="tooltip-icon">?</div>
-                <div class="tooltip-popup">Amount borrowed from the lender to invest. This is secured by an existing portfolio.</div>
-            </div>
-            <input type="number" id="loanAmountCustom" value="10000" onchange="syncLoanAmount()" oninput="syncLoanAmount()">
+            <input type="number" id="loanAmount" step="1" onchange="updateLoanFromDirectInput()" oninput="updateLoanFromDirectInput()">
         </div>
         <div class="input-group" id="interestRateGroup">
             <div class="label-wrapper">
@@ -157,7 +146,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">Annual interest paid on borrowed money over the long term. A common assumption is ~<span id="interest-rate-tooltip"></span> based on historical prime rates plus lender spread. Higher rates require higher market returns to profit.</div>
             </div>
-            <input type="number" id="interestRate" value="7.0" step="0.1" onchange="handleInterestRateChange()" oninput="handleInterestRateChange()">
+            <input type="number" id="interestRate" step="0.1" onchange="handleInterestRateChange()" oninput="handleInterestRateChange()">
         </div>
         <div class="input-group">
             <div class="label-wrapper">
@@ -165,7 +154,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">The minimum monthly payment toward debt. Set by Payment Type: Custom (user-defined), Interest Only (covers interest accrual only), or Standard Mode (<span id="payment-pct-tooltip"></span> of amortized payment). Budget amounts exceeding the minimum allocate to investments.</div>
             </div>
-            <input type="number" id="minPayment" value="0" onchange="syncMinPayment()">
+            <input type="number" id="minPayment" onchange="syncMinPayment()">
         </div>
         <div class="input-group" id="paymentTypeGroup">
             <div class="label-wrapper">
@@ -185,7 +174,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">Expected annual return. The S&P 500 has averaged ~<span id="growth-tooltip"></span> historically. This is the expected return—actual results vary year to year.</div>
             </div>
-            <input type="number" id="growth" value="8" step="0.1">
+            <input type="number" id="growth" step="0.1">
         </div>
         <div class="input-group">
             <div class="label-wrapper">
@@ -193,7 +182,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">How wild the swings get. <span id="volatility-tooltip"></span> is standard stock market volatility (S&P 500). This simulator uses this to generate realistic scenarios where some years are +30% and others are -20%.</div>
             </div>
-            <input type="number" id="vol" value="15" step="0.1">
+            <input type="number" id="vol" step="0.1">
         </div>
         <div class="input-group">
             <div class="label-wrapper">
@@ -201,7 +190,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">The maximum Loan-to-Value before forced liquidation. <span id="margin-call-tooltip"></span> is conservative. More aggressive lenders allow up to 75-80%; more conservative lenders enforce 40-50%.</div>
             </div>
-            <input type="number" id="marginCall" value="75" step="0.1">
+            <input type="number" id="marginCall" step="0.1">
         </div>
         <div class="input-group">
             <div class="label-wrapper">
@@ -209,7 +198,7 @@
                 <div class="tooltip-icon">?</div>
                 <div class="tooltip-popup">Annual inflation rate used to convert nominal wealth to real dollars (today's purchasing power). Locked to <span id="inflation-tooltip"></span> in Standard Mode based on long-term expectations.</div>
             </div>
-            <input type="number" id="inflationRate" value="3.5" step="0.1">
+            <input type="number" id="inflationRate" step="0.1">
         </div>
     </div>
 
@@ -243,13 +232,14 @@
                 <!-- Histogram Chart -->
         <div id="histogramChart"></div>
         
+        <!-- Deposits Over Time Line Chart -->
+        <div id="depositsLineChart"></div>
+        
         <!-- Dynamic Strategy Summary -->
         <div id="dynamicSummary" class="strategy-summary"></div>
         
 
-        
-        <div id="chart"></div>
-       
+               
     </div>
 
     <div class="social-section">
@@ -359,9 +349,9 @@
             Every simulation outcome falls into one of three mutually exclusive categories. The distribution across these categories determines whether leverage generates sufficient returns per unit of risk:
         </p>
         <ul style="margin: 12px 0; line-height: 1.8; padding-left: 20px;">
-            <li id="ruin-outcome"><strong>Ruin (Red):</strong> Your account hit the <span id="margin-ruin"></span> margin call threshold and was liquidated. You lost everything (0 wealth remaining). This happens when debt grew faster than your portfolio value during a downturn. The "ruin probability" is the percentage of <span id="sim-count-ruin"></span> scenarios where this occurs.</li>
-            <li><strong>Sucker (Orange):</strong> Liquidation did not occur, but final wealth falls below the no-debt baseline. Interest payments to the lender and capital allocation to debt service, combined with outcome variance, produced underperformance relative to the risk-free leveraged strategy.</li>
-            <li id="profit-outcome"><strong>Profit (Green):</strong> You survived without liquidation, <em>and</em> your final wealth exceeds the no-debt baseline. The <span id="spread-profit"></span> spread between borrowing costs and market returns compounded in your favor. You earned more than you would have without leverage.</li>
+            <li id="ruin-outcome"><strong>Ruin (Red):</strong> Either (1) your account hit the <span id="margin-ruin"></span> margin call threshold and was liquidated, or (2) you ended with less wealth than your initial equity.</li>
+            <li><strong>Sucker (Orange):</strong> You avoided liquidation but are unlikely to turn a profit.</li>
+            <li id="profit-outcome"><strong>Profit (Green):</strong> You survived without liquidation, and are likely to earn more than you would have without leverage.</li>
         </ul>
         <p style="font-size: 0.9rem; color: #666;">
             Distribution across these three categories is non-uniform and depends entirely on payment strategy. Lower monthly payments increase ruin probability but also increase profit probability if liquidation is avoided. Higher monthly payments reduce ruin probability at the cost of reduced profit probability. The optimal payment strategy balances ruin risk reduction against profit probability maximization. When ruin risk exceeds defined thresholds, the analysis indicates borrowing reduction.
@@ -515,7 +505,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<script src="scripts/adapter.js"></script>
 <script src="scripts/integration.js"></script>
 <script src="scripts/script.js"></script>
 </body>

@@ -232,7 +232,7 @@ const CopywritingHelpers = {
      * Generate three outcomes ruin text
      */
     getThreeOutcomesRuinText() {
-        return `<strong>Ruin (Red):</strong> Your account hit the ${this.getMarginCallText()} margin call threshold and was liquidated. You lost everything (0 wealth remaining). This happens when debt grew faster than your portfolio value during a downturn. The "ruin probability" is the percentage of ${this.getSimulationCountText()} scenarios where this occurs.`;
+        return `<strong>Ruin (Red):</strong> Either (1) your account hit the ${this.getMarginCallText()} margin call threshold and was liquidated, or (2) you ended with less wealth than your initial equity. Both outcomes represent failure. The "ruin probability" is the percentage of ${this.getSimulationCountText()} scenarios where this occurs.`;
     },
 
     /**
@@ -268,6 +268,229 @@ const CopywritingHelpers = {
      */
     getMonteCarloIntroText() {
         return `This tool uses <strong>Monte Carlo simulation</strong> combined with <strong>Present Value of Annuity</strong> principles to stress-test a Portfolio LOC strategy across ${this.getSimulationCountText()} different market scenarios.`;
+    },
+
+    /**
+     * Get mode description for Standard Mode
+     */
+    getModeStandardDescription() {
+        return `<p><strong>Standard Mode:</strong> Uses research-backed defaults. Set your budget, collateral, and desired LTV; the calculator determines your loan amount and payment strategy.</p>`;
+    },
+
+    /**
+     * Get mode description for Custom Mode
+     */
+    getModeCustomDescription() {
+        return `<p><strong>Custom Mode:</strong> For power users auditing other lenders, different borrowing costs, or higher-risk margin strategies. All parameters are unlocked including inflation rate; variability and risk increase with inputs.</p>`;
+    },
+
+    /**
+     * Get asset label for LTV input
+     */
+    getAssetLabelLTV() {
+        return 'Starting LTV (%)';
+    },
+
+    /**
+     * Get asset label for Book Value input
+     */
+    getAssetLabelBookValue() {
+        return 'Book Value of Collateral Account ($)';
+    },
+
+    /**
+     * Get asset tooltip for LTV input
+     */
+    getAssetTooltipLTV() {
+        const ltvAbbrev = STANDARD_MODE_DEFAULTS.MAX_LTV;
+        const collateralAmount = (100000 / (ltvAbbrev / 100)).toLocaleString();
+        return `Loan-to-Value ratio: percentage of portfolio that is borrowed. ${ltvAbbrev}% LTV on a $${collateralAmount}K portfolio = $100K loan. Higher LTV increases margin call probability.`;
+    },
+
+    /**
+     * Get asset tooltip for Book Value input
+     */
+    getAssetTooltipBookValue() {
+        return 'The book value of your deposits as reported by your broker. This is typically the original cost basis of deposits, not the current market value. Your broker will provide the difference between book and market value.';
+    },
+
+    /**
+     * Get payment warning text (when monthly budget insufficient)
+     */
+    getPaymentWarningText(monthlyBudget, amortizedPayment, years) {
+        return `Your monthly budget ($${monthlyBudget.toFixed(2)}) is less than the full amortization payment ($${amortizedPayment.toFixed(2)}). This means you cannot fully pay off the loan over ${years} years with your current budget.`;
+    },
+
+    /**
+     * Get simulation error message
+     */
+    getSimulationErrorMessage(message) {
+        return `Simulation failed: ${message}`;
+    },
+
+    /**
+     * Format strategy summary narrative with current values
+     */
+    getStrategySummaryNarrative(monthlyBudget, debtPayment, marketInvestment, survivalRate, medianRealWealth, benchmarkMedian, delta) {
+        const deltaPrefix = delta >= 0 ? '+' : '-';
+        return {
+            allocation: `You have a monthly budget of <strong>$${monthlyBudget.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> for debt payments and investments.`,
+            paymentBreakdown: `With this strategy, you pay <strong>$${debtPayment.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> to the lender and invest the remaining <strong>$${marketInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> into a low-cost S&P 500 ETF.`,
+            outcomes: `This allocation results in a <strong>${survivalRate.toFixed(1)}%</strong> probability of survival. In the expected case, your Real Wealth (in today's purchasing power) is <strong>$${medianRealWealth.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong>.`,
+            baseline: `Baseline Comparison: If you simply invested your <strong>$${monthlyBudget.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong> monthly budget into the S&P 500 without borrowing, you would likely end up with <strong>$${benchmarkMedian.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong>.`,
+            leverageImpact: `Leverage Impact: ${deltaPrefix}$${Math.abs(delta).toLocaleString(undefined, {maximumFractionDigits: 0})}`
+        };
+    },
+
+    /**
+     * Generate verdict from trinary statistics
+     */
+    generateVerdict(trinaryStats) {
+        if (!trinaryStats) return null;
+        
+        const { ruinPercent, suckerPercent, profitPercent } = trinaryStats;
+        const spreadPercent = profitPercent - suckerPercent;
+        
+        const POINTLESS_CEILING = 10.0;
+        const STRONG_FLOOR = 20.0;
+        const ACCEPTABLE_RUIN_THRESHOLD = 5.0;
+        
+        // Verdict classification logic:
+        // - DANGEROUS: Any ruin > 5% is unacceptable
+        // - POINTLESS: Spread < 10% (even if ruin is low, no edge)
+        // - MARGINAL: Ruin between 2-5% OR spread 10-20% (some edge but risky)
+        // - STRONG: Ruin < 2% AND spread >= 20% (strong edge with contained risk)
+        
+        const isDangerous = ruinPercent > ACCEPTABLE_RUIN_THRESHOLD;
+        const isPointless = spreadPercent < POINTLESS_CEILING && !isDangerous;
+        const isStrong = spreadPercent >= STRONG_FLOOR && ruinPercent < 2.0;
+        const isMarginal = !isDangerous && !isStrong && !isPointless;
+        
+        let status = null;
+        let color = null;
+        let icon = null;
+        let title = null;
+        let message = null;
+        let fixSuggestion = null;
+        
+        if (isDangerous) {
+            status = 'DANGEROUS';
+            color = '#B3261E';
+            icon = '⛔';
+            title = 'DANGEROUS: UNACCEPTABLE RUIN RISK';
+            message = `You have a <strong>${ruinPercent.toFixed(1)}%</strong> chance of ruin (liquidation or ending with a loss). This exceeds acceptable risk tolerance. Reduce borrowed principal or increase monthly payment significantly.`;
+            fixSuggestion = this.generateDiagnosticFix('dangerous', trinaryStats);
+        } else if (isPointless) {
+            status = 'POINTLESS';
+            color = '#FF9800';
+            icon = '⚠️';
+            title = 'POINTLESS: ODDS UNFAVORABLE';
+            message = `The probability of outperforming a standard no-debt investment is <strong>${profitPercent.toFixed(1)}%</strong>. Underperformance probability is <strong>${(suckerPercent + ruinPercent).toFixed(1)}%</strong> combined (ruin or negative spread). The borrowing cost exceeds the investment return advantage.`;
+            fixSuggestion = this.generateDiagnosticFix('pointless', trinaryStats);
+        } else if (isMarginal) {
+            status = 'MARGINAL';
+            color = '#AFAFAF';
+            icon = '🤔';
+            title = 'MARGINAL: MODERATE EDGE OR ELEVATED RUIN';
+            message = `Spread advantage: <strong>${spreadPercent.toFixed(1)}%</strong> per year. Profit probability: <strong>${profitPercent.toFixed(1)}%</strong>. Underperformance probability: <strong>${suckerPercent.toFixed(1)}%</strong>. Ruin probability: <strong>${ruinPercent.toFixed(1)}%</strong>. Strategy is marginal due to either limited spread advantage (target >20%) or elevated ruin risk (target <2%). Expect mixed outcomes with volatility risk during downturns.`;
+            fixSuggestion = this.generateDiagnosticFix('marginal', trinaryStats);
+        } else if (isStrong) {
+            status = 'STRONG';
+            color = '#1B5E20';
+            icon = '✅';
+            title = 'STRONG: FAVORABLE RISK-REWARD RATIO';
+            message = `Spread advantage: <strong>${spreadPercent.toFixed(1)}%</strong> per year. Profit probability: <strong>${profitPercent.toFixed(1)}%</strong>. Ruin risk: <strong>${ruinPercent.toFixed(1)}%</strong>. The spread is sufficient to meet industry standards (>20%) with ruin risk contained below 2%. The strategy has mathematical justification relative to risk.`;
+            fixSuggestion = null;
+        } else {
+            status = 'MARGINAL';
+            color = '#AFAFAF';
+            icon = '🤔';
+            title = 'MARGINAL: INSUFFICIENT DATA';
+            message = `Spread: <strong>${spreadPercent.toFixed(1)}%</strong>. Ruin probability: <strong>${ruinPercent.toFixed(1)}%</strong>. Classification: marginal strategy with limited advantage.`;
+            fixSuggestion = this.generateDiagnosticFix('marginal', trinaryStats);
+        }
+        
+        return {
+            status,
+            color,
+            icon,
+            title,
+            message,
+            ruinPercent,
+            suckerPercent,
+            profitPercent,
+            spread: spreadPercent,
+            fixSuggestion
+        };
+    },
+
+    /**
+     * Generate diagnostic fix suggestions by category
+     */
+    generateDiagnosticFix(category, trinaryStats) {
+        const { ruinPercent, suckerPercent, profitPercent } = trinaryStats;
+        let fixes = [];
+        
+        if (category === 'dangerous') {
+            fixes.push("<strong>Reduce your Loan Amount.</strong> Your borrowed capital is too large relative to your safety buffer. Avoid borrowing more than a third of your portfolio's value.");
+            fixes.push("<strong>Add More Collateral.</strong> Deposit additional cash into your account without borrowing more. This strengthens your cushion against margin calls.");
+            fixes.push("<strong>Increase Monthly Payment.</strong> Pay down the loan faster before a crash occurs. The longer you stay leveraged, the higher your ruin risk.");
+        } else if (category === 'pointless') {
+            fixes.push("<strong>Check Your Interest Rate.</strong> If you're paying more than 7-8% annual interest, leverage rarely works mathematically. Consider switching to a lower-cost loan or margin product.");
+            fixes.push("<strong>Increase Your Monthly Budget.</strong> Pay down the principal faster. Leverage works best when your debt is a shrinking percentage of your assets.");
+            fixes.push("<strong>Extend Your Time Horizon.</strong> If your simulation is under 10 years, short-term volatility is drowning out long-term gains. Leverage needs time to compound.");
+        } else if (category === 'marginal') {
+            fixes.push("<strong>Lower Your LTV by 5%.</strong> Often, a small reduction in borrowed capital significantly increases your spread by reducing interest costs and ruin risk together.");
+            fixes.push("<strong>Invest Your Monthly Surplus.</strong> Ensure the money you don't use for debt payments goes into growth assets (stocks/ETFs), not cash. If you're holding cash, you're wasting the leverage benefit.");
+            fixes.push("<strong>Test Interest Rate Risk.</strong> Try to increase your interest rate by 1%. If this strategy becomes \"Pointless,\" it's too fragile. You need more cushion.");
+        }
+        
+        return fixes.length > 0 ? fixes : null;
+    },
+
+    /**
+     * Get success criteria table headers
+     */
+    getSuccessCriteriaHeaders() {
+        return { outcome: 'Outcome', goal: 'Target Goal', current: 'Your Current', status: 'Status' };
+    },
+
+    /**
+     * Get success criteria labels
+     */
+    getSuccessCriteriaLabel(type) {
+        const labels = {
+            ruin: 'Ruin',
+            sucker: 'Sucker',
+            profit: 'Profit'
+        };
+        return labels[type] || '';
+    },
+
+    /**
+     * Get success criteria thresholds text
+     */
+    getSuccessCriteriaThreshold(type) {
+        const thresholds = {
+            ruin: '≤ 2%',
+            sucker: 'Lower is Better',
+            profit: '≥ 20% Spread*'
+        };
+        return thresholds[type] || '';
+    },
+
+    /**
+     * Get success criteria note
+     */
+    getSuccessCriteriaNoteText() {
+        return '*Spread = Profit % minus Sucker %. A 51/49 split is a coin flip; a 60/40 split is a strategy.';
+    },
+
+    /**
+     * Get "How to Fix Your Strategy" header
+     */
+    getFixStrategyHeaderText() {
+        return 'How to Fix Your Strategy';
     }
 };
 

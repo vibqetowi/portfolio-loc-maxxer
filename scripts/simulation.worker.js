@@ -1,6 +1,39 @@
 /**
- * Web Worker for offloading WebAssembly simulation to background thread
- * Prevents UI freezing during heavy computation
+ * Web Worker - WASM Bridge for Single Strategy Simulation
+ * 
+ * This worker:
+ * 1. Receives initial conditions for ONE strategy
+ * 2. Marshals data to WASM input buffer
+ * 3. Calls WASM runSimulation()
+ * 4. Unmarshals results from WASM output buffer
+ * 5. Returns schedule + wealth array to main thread
+ * 
+ * WASM Input Format (11 values):
+ * [0] initialDebt - amount owed at t=0
+ * [1] initialBalance - cash/assets at t=0
+ * [2] monthlyPayment - debt payment per month (0 if no debt)
+ * [3] monthlyBudget - deposits available per month
+ * [4] monthlyRate - interest rate as decimal (0 if no debt)
+ * [5] years - simulation duration
+ * [6] volatility - standard deviation of returns
+ * [7] growth - expected annual return
+ * [8] inflation - inflation rate
+ * [9] marginCallLTV - debt/assets ratio threshold for failure
+ * [10] simulationCount - number of Monte Carlo runs
+ * 
+ * WASM Output Format:
+ * [0] status (0 = success)
+ * [1] months (calculated from years)
+ * [2] survivalRate (percent)
+ * [3] medianWealth (real dollars)
+ * [4] p90Wealth (real dollars)
+ * [5] expectedWealth (real dollars)
+ * [6] finalDebt (remaining debt at end of schedule)
+ * [7] totalDeposits (sum of deposits over period)
+ * [8] numSurvived (count of non-failed simulations)
+ * [9 to 9+months] depositPath[] - T=0 initial capital, then monthly deposits (months+1 elements)
+ * [9+months+1 to 9+2*months+1] debtPath[] - T=0 initial debt, then monthly balances (months+1 elements)
+ * [9+2*months+2 onward] wealthArray[] - final wealth of survivors
  */
 
 let wasmInstance = null;
@@ -12,6 +45,10 @@ async function initWasm() {
     
     try {
         const response = await fetch('../build/sim.wasm');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch WASM module: HTTP ${response.status} ${response.statusText}`);
+        }
+        
         const buffer = await response.arrayBuffer();
         const wasmModule = await WebAssembly.instantiate(buffer, {
             env: {
@@ -25,89 +62,120 @@ async function initWasm() {
         wasmInstance = wasmModule.instance;
         wasmMemory = wasmInstance.exports.memory;
         
+        // Verify required exports exist
+        if (!wasmInstance.exports.getInputPtr) {
+            throw new Error('WASM module missing getInputPtr export');
+        }
+        if (!wasmInstance.exports.getOutputPtr) {
+            throw new Error('WASM module missing getOutputPtr export');
+        }
+        if (!wasmInstance.exports.runSimulation) {
+            throw new Error('WASM module missing runSimulation export');
+        }
+        if (!wasmInstance.exports.memory) {
+            throw new Error('WASM module missing memory export');
+        }
+        
         console.log('[Worker] WebAssembly module loaded successfully');
     } catch (error) {
-        console.error('[Worker] Failed to load WebAssembly:', error);
-        throw error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Worker] Failed to load WebAssembly:', errorMessage);
+        throw new Error(`WASM initialization failed: ${errorMessage}`);
     }
+}
+
+/**
+ * Marshal strategy inputs to WASM input buffer
+ */
+function marshalInputs(inputs) {
+    const inputPtr = wasmInstance.exports.getInputPtr();
+    const inputView = new Float64Array(wasmMemory.buffer, inputPtr, 20);
+    
+    inputView[0] = inputs.initialDebt;
+    inputView[1] = inputs.initialBalance;
+    inputView[2] = inputs.monthlyPayment;
+    inputView[3] = inputs.monthlyBudget;
+    inputView[4] = inputs.monthlyRate;
+    inputView[5] = inputs.years;
+    inputView[6] = inputs.volatility;
+    inputView[7] = inputs.growth;
+    inputView[8] = inputs.inflation;
+    inputView[9] = inputs.marginCallLTV;
+    inputView[10] = inputs.simulationCount;
+}
+
+/**
+ * Unmarshal WASM output buffer to strategy results
+ */
+function unmarshalResults(outputSize) {
+    const outputPtr = wasmInstance.exports.getOutputPtr();
+    const outputView = new Float64Array(wasmMemory.buffer, outputPtr, outputSize);
+    const rawBuffer = new Float64Array(outputSize);
+    
+    for (let i = 0; i < outputSize; i++) {
+        rawBuffer[i] = outputView[i];
+    }
+    
+    return rawBuffer;
 }
 
 // Handle messages from main thread
 self.onmessage = async function(e) {
-    const { id, inputs } = e.data;
-    console.log('[Worker] Message received, id:', id, 'inputs:', inputs);
+    const { id, inputs, strategyIndex } = e.data;
     
     try {
         // Initialize Wasm if needed
-        console.log('[Worker] Initializing Wasm...');
-        await initWasm();
-        console.log('[Worker] Wasm initialized');
+        if (!wasmInstance) {
+            console.log(`[Worker ${strategyIndex}] Initializing WASM...`);
+            await initWasm();
+            console.log(`[Worker ${strategyIndex}] WASM initialized`);
+        }
         
-        // Get input buffer pointer and write inputs
-        const inputPtr = wasmInstance.exports.getInputPtr();
-        const inputView = new Float64Array(wasmMemory.buffer, inputPtr, 15);
+        // Validate inputs exist
+        if (!inputs) {
+            throw new Error('No inputs provided to worker');
+        }
         
-        inputView[0] = inputs.loanAmount;
-        inputView[1] = inputs.interestRate;
-        inputView[2] = inputs.volatility;
-        inputView[3] = inputs.growth;
-        inputView[4] = inputs.inflation;
-        inputView[5] = inputs.monthlyBudget;
-        inputView[6] = inputs.minPayment;
-        inputView[7] = inputs.maxPayment;
-        inputView[8] = inputs.simulationCount; // Leveraged strategies simulation count
-        inputView[9] = inputs.years;
-        inputView[10] = inputs.marginCallLTV;
-        inputView[11] = inputs.initialAssets;
-        inputView[12] = inputs.initialEquity;
-        inputView[13] = inputs.numStrategies || 10; // Number of leveraged strategies
-        inputView[14] = inputs.baselineSimulationCount || 100000; // Baseline simulation count
+        // Marshal inputs to WASM
+        console.log(`[Worker ${strategyIndex}] Marshaling inputs...`);
+        marshalInputs(inputs);
+        console.log(`[Worker ${strategyIndex}] Running simulation...`);
         
-        // Run simulation - returns number of elements written
-        console.log('[Worker] Starting Wasm simulation...');
+        // Run WASM simulation
         const startTime = performance.now();
         const outputSize = wasmInstance.exports.runSimulation();
         const endTime = performance.now();
-        console.log('[Worker] Wasm simulation completed, outputSize:', outputSize, 'time:', (endTime - startTime).toFixed(2), 'ms');
         
-        // Get output buffer pointer and read results
-        const outputPtr = wasmInstance.exports.getOutputPtr();
-        const outputView = new Float64Array(wasmMemory.buffer, outputPtr, outputSize);
+        console.log(`[Worker ${strategyIndex}] Simulation complete, unmarshaling results...`);
         
-        // Read status
-        const status = outputView[0];
-        const numScenarios = outputView[1];
+        // Unmarshal results from WASM
+        const rawResults = unmarshalResults(outputSize);
         
+        // Validate
+        const status = rawResults[0];
         if (status !== 0) {
-            throw new Error(`Simulation failed with status: ${status}`);
+            throw new Error(`WASM simulation failed with status: ${status}`);
         }
         
-        // Copy output data to transferable array
-        console.log('[Worker] Copying output buffer...');
-        const rawBuffer = new Float64Array(outputSize);
-        for (let i = 0; i < outputSize; i++) {
-            rawBuffer[i] = outputView[i];
-        }
-        console.log('[Worker] Buffer copied, first 10 values:', Array.from(rawBuffer.slice(0, 10)));
+        console.log(`[Worker ${strategyIndex}] Success, returning results`);
         
-        // Send results back to main thread
-        console.log('[Worker] Posting message back to main thread');
+        // Return to main thread
         self.postMessage({
             id,
             success: true,
-            rawBuffer: rawBuffer,
-            computeTime: endTime - startTime
+            rawResults: rawResults,
+            computeTime: endTime - startTime,
+            strategyIndex: strategyIndex
         });
         
     } catch (error) {
-        console.error('[Worker] Simulation error:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[Worker ${e.data.strategyIndex}] Error:`, error, errorMessage);
         self.postMessage({
-            id,
+            id: e.data.id,
             success: false,
-            error: error.message
+            error: errorMessage || 'Unknown error',
+            strategyIndex: e.data.strategyIndex
         });
     }
 };
-
-// Signal ready
-self.postMessage({ ready: true });
