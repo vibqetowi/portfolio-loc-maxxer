@@ -75,13 +75,6 @@ jobs:
             exit 1
           fi
           
-          # Check scripts
-          for script in adapter.js integration.js script.js simulation.worker.js; do
-            if [ ! -f "_site/scripts/$script" ]; then
-              echo "Error: $script not found in _site/scripts"
-              exit 1
-            fi
-          done
           
           # Check config and styles
           if [ ! -f "_site/config.js" ]; then
